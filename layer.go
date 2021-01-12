@@ -24,7 +24,11 @@ func clip(in filename, bin filename) gdal.Layer {
 	source := gdal.OpenDataSource(in, 0).LayerByIndex(0)
 	target := gdal.OpenDataSource(bin, 0).LayerByIndex(0)
 
-	println(in, bin)
+	ct, _ := target.FeatureCount(true)
+	if ct > 1 {
+		println("Counted", ct, "features in", in)
+		panic("Clipping only supports single-featured datasets")
+	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")
 	ds, ok := drv.Create(out, []string{})
