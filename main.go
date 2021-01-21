@@ -83,7 +83,7 @@ func main() {
 	switch command {
 	case "bounds":
 		{
-			println("bounds:", get_bounds(inputfile).ToJSON())
+			println("bounds:", bounds(inputfile).ToJSON())
 		}
 
 	case "fields":

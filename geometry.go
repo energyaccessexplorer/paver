@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func get_bounds(in filename) gdal.Geometry {
+func bounds(in filename) gdal.Geometry {
 	t := gdal.CreateSpatialReference("")
 	t.FromEPSG(default_epsg)
 
