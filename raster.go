@@ -32,8 +32,6 @@ func ids_raster(in filename, gid string) (filename, error) {
 	}
 	dest.Close()
 
-	println("ids_raster output:", out)
-
 	return out, err
 }
 
@@ -61,8 +59,6 @@ func geometry_raster(in filename, lname string) (filename, error) {
 		panic(err)
 	}
 	defer dest.Close()
-
-	println("rasterise output:", out)
 
 	return out, err
 }
@@ -96,8 +92,6 @@ func proximity_raster(in filename) (filename, error) {
 		ComputeProximity(ds.RasterBand(1), opts, gdal.DummyProgress, nil)
 
 	ds.Close()
-
-	println("proximity output:", out)
 
 	return out, err
 }

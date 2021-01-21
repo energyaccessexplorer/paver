@@ -48,7 +48,5 @@ func clip(in filename, bin filename) gdal.Layer {
 
 	ds.Destroy()
 
-	println("clip output:", out)
-
 	return target
 }

@@ -83,7 +83,7 @@ func main() {
 	switch command {
 	case "bounds":
 		{
-			println("bounds:", bounds(inputfile).ToJSON())
+			fmt.Println("bounds:", bounds(inputfile).ToJSON())
 		}
 
 	case "info":
@@ -98,6 +98,8 @@ func main() {
 			}
 
 			strip(inputfile, selectattrs)
+
+			println("strip output:", out)
 		}
 
 	case "rasterise":
@@ -107,14 +109,17 @@ func main() {
 			}
 
 			geometry_raster(inputfile, layername)
+
+			println("rasterise output:", out)
 		}
 
 	case "proximity":
 		{
 			r, _ := geometry_raster(inputfile, layername)
 
-			out = rand_filename()
 			proximity_raster(r)
+
+			println("proximity output:", out)
 		}
 
 	case "idsraster":
@@ -125,6 +130,8 @@ func main() {
 			}
 
 			ids_raster(inputfile, idattr)
+
+			println("ids_raster output:", out)
 		}
 
 	case "clip":
@@ -138,6 +145,8 @@ func main() {
 			}
 
 			clip(inputfile, targetfile)
+
+			println("clip output:", out)
 		}
 
 	default:
