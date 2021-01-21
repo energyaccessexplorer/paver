@@ -2,9 +2,23 @@ package main
 
 import (
 	"./gdal"
+	"encoding/json"
 	"fmt"
 	"strconv"
 )
+
+type dataset_info struct {
+	Fields       []string   `json:"fields"`
+	FeatureCount int        `json:"featurecount"`
+	Bounds       [4]float64 `json:"bounds"`
+}
+
+func featurecount(in filename) int {
+	source := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	cs, _ := source.FeatureCount(true)
+
+	return cs
+}
 
 func bounds(in filename) gdal.Geometry {
 	t := gdal.CreateSpatialReference("")
@@ -53,4 +67,21 @@ func bounds(in filename) gdal.Geometry {
 	}
 
 	return g
+}
+
+func info(in filename) string {
+	e := bounds(in).Envelope()
+
+	i := dataset_info{
+		fields(in),
+		featurecount(in),
+		[4]float64{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
+	}
+
+	j, err := json.Marshal(i)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	return string(j)
 }

@@ -86,9 +86,9 @@ func main() {
 			println("bounds:", bounds(inputfile).ToJSON())
 		}
 
-	case "fields":
+	case "info":
 		{
-			fmt.Println("fields:", fields(inputfile))
+			fmt.Println("info:", info(inputfile))
 		}
 
 	case "strip":
