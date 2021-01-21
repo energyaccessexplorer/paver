@@ -117,14 +117,14 @@ func main() {
 			proximity_raster(r)
 		}
 
-	case "admidraster":
+	case "idsraster":
 		{
 			if idattr == "" {
 				println("No -g (idattr) given. Will use 'OBJECTID'")
 				idattr = default_idattr
 			}
 
-			adm_id_raster(inputfile, idattr)
+			ids_raster(inputfile, idattr)
 		}
 
 	case "clip":

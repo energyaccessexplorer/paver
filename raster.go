@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func adm_id_raster(in filename, gid string) (filename, error) {
+func ids_raster(in filename, gid string) (filename, error) {
 	//  -a Identifies an attribute field on the features to be used for a burn-in
 	//     value. The value will be burned into all output bands.
 	//
@@ -32,7 +32,7 @@ func adm_id_raster(in filename, gid string) (filename, error) {
 	}
 	dest.Close()
 
-	println("admidraster output:", out)
+	println("ids_raster output:", out)
 
 	return out, err
 }
