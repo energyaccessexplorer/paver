@@ -97,7 +97,7 @@ func main() {
 				panic("No -s (select attributes) given.")
 			}
 
-			strip_geojson(inputfile, selectattrs)
+			strip(inputfile, selectattrs)
 		}
 
 	case "rasterise":

@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func strip_geojson(in filename, attrs []string) (filename, error) {
+func strip(in filename, attrs []string) (filename, error) {
 	opts := []string{
 		"-f", "GeoJSON",
 		"-simplify", res,
