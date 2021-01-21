@@ -108,6 +108,10 @@ func main() {
 
 	case "proximity":
 		{
+			if layername == "" {
+				panic("No -l (layername) given.")
+			}
+
 			r, _ := geometry_raster(inputfile, layername)
 
 			out, _ := proximity_raster(r)

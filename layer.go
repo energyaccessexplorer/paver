@@ -33,10 +33,7 @@ func clip(in filename, bin filename) filename {
 	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")
-	ds, ok := drv.Create(out, []string{})
-	if !ok {
-		panic(ok)
-	}
+	ds, _ := drv.Create(out, []string{})
 
 	s := gdal.CreateSpatialReference("")
 	s.FromEPSG(default_epsg)
