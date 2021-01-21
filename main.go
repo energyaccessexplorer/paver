@@ -63,7 +63,7 @@ func parse_flags() {
 	flag.Parse()
 }
 
-func rand_file() filename {
+func rand_filename() filename {
 	return "./outputs/" + uuid.Must(uuid.NewV4()).String()
 }
 
@@ -77,7 +77,7 @@ func main() {
 	}
 
 	if out == "" {
-		out = rand_file()
+		out = rand_filename()
 	}
 
 	switch command {
@@ -113,7 +113,7 @@ func main() {
 		{
 			r, _ := geometry_raster(inputfile, layername)
 
-			out = rand_file()
+			out = rand_filename()
 			proximity_raster(r)
 		}
 
