@@ -6,6 +6,8 @@ import (
 )
 
 func strip(in filename, attrs []string) (filename, error) {
+	out := rand_filename()
+
 	opts := []string{
 		"-f", "GeoJSON",
 		"-simplify", res,

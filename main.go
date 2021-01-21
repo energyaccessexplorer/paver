@@ -18,8 +18,6 @@ var (
 
 	selectattrs arrayFlag
 
-	out string
-
 	command    string
 	inputfile  string
 	targetfile string
@@ -49,7 +47,6 @@ func parse_flags() {
 	flag.StringVar(&command, "c", "", "Subcommand")
 
 	flag.StringVar(&inputfile, "i", "", "File to be processed")
-	flag.StringVar(&out, "o", "", "File to write the output")
 	flag.StringVar(&targetfile, "t", "", "Target file to use as reference for clipping/cropping")
 
 	flag.IntVar(&res_arg, "r", 1000, "Resolution to use for 'simplify")
@@ -76,10 +73,6 @@ func main() {
 		panic("No -i (input file) given")
 	}
 
-	if out == "" {
-		out = rand_filename()
-	}
-
 	switch command {
 	case "bounds":
 		{
@@ -97,7 +90,7 @@ func main() {
 				panic("No -s (select attributes) given.")
 			}
 
-			strip(inputfile, selectattrs)
+			out, _ := strip(inputfile, selectattrs)
 
 			println("strip output:", out)
 		}
@@ -108,7 +101,7 @@ func main() {
 				panic("No -l (layername) given.")
 			}
 
-			geometry_raster(inputfile, layername)
+			out, _ := geometry_raster(inputfile, layername)
 
 			println("rasterise output:", out)
 		}
@@ -117,7 +110,7 @@ func main() {
 		{
 			r, _ := geometry_raster(inputfile, layername)
 
-			proximity_raster(r)
+			out, _ := proximity_raster(r)
 
 			println("proximity output:", out)
 		}
@@ -129,7 +122,7 @@ func main() {
 				idattr = default_idattr
 			}
 
-			ids_raster(inputfile, idattr)
+			out, _ := ids_raster(inputfile, idattr)
 
 			println("ids_raster output:", out)
 		}
@@ -144,7 +137,7 @@ func main() {
 				panic("No -t (targetfile) given:")
 			}
 
-			clip(inputfile, targetfile)
+			out, _ := clip(inputfile, targetfile)
 
 			println("clip output:", out)
 		}
