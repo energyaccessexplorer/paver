@@ -20,7 +20,7 @@ func fields(in filename) []string {
 	return a
 }
 
-func clip(in filename, bin filename) filename {
+func clip(in filename, bin filename) (filename, error) {
 	out := rand_filename()
 
 	source := gdal.OpenDataSource(in, 0).LayerByIndex(0)
@@ -47,5 +47,5 @@ func clip(in filename, bin filename) filename {
 
 	ds.Destroy()
 
-	return out
+	return out, err
 }
