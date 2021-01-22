@@ -146,6 +146,34 @@ func main() {
 			println("clip output:", out)
 		}
 
+	case "admin_boundaries":
+		{
+			if idattr == "" {
+				println("No -g (idattr) given. Will use 'OBJECTID'")
+				idattr = default_idattr
+			}
+
+			admin_boundaries(inputfile, idattr)
+		}
+
+	case "vectors_routine":
+		{
+			if layername == "" {
+				panic("No -l (layername) given.")
+			}
+
+			if idattr == "" {
+				println("No -g (idattr) given. Will use 'OBJECTID'")
+				idattr = default_idattr
+			}
+
+			if targetfile == "" {
+				panic("No -t (targetfile) given:")
+			}
+
+			vectors_routine(inputfile, targetfile, layername, []string{idattr})
+		}
+
 	default:
 		{
 			println("No (valid) -c command given:", command)
