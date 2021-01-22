@@ -37,8 +37,10 @@ func ids_raster(in filename, gid string) (filename, error) {
 	return out, err
 }
 
-func geometry_raster(in filename, lname string) (filename, error) {
+func geometry_raster(in filename) (filename, error) {
 	out := rand_filename()
+
+	lname := gdal.OpenDataSource(in, 0).LayerByIndex(0).Name()
 
 	opts := []string{
 		"-l", lname,

@@ -11,10 +11,9 @@ import (
 )
 
 var (
-	res_arg   int
-	res       string
-	layername string
-	idattr    string
+	res_arg int
+	res     string
+	idattr  string
 
 	selectattrs arrayFlag
 
@@ -50,7 +49,6 @@ func parse_flags() {
 	flag.StringVar(&targetfile, "t", "", "Target file to use as reference for clipping/cropping")
 
 	flag.IntVar(&res_arg, "r", 1000, "Resolution to use for 'simplify")
-	flag.StringVar(&layername, "l", "", "Layer name from the datasource that will be used for input features.")
 	flag.StringVar(&idattr, "g", default_idattr, "blah blah")
 
 	flag.Var(&selectattrs, "s", "Attributes to extract from the features")
@@ -97,22 +95,14 @@ func main() {
 
 	case "rasterise":
 		{
-			if layername == "" {
-				panic("No -l (layername) given.")
-			}
-
-			out, _ := geometry_raster(inputfile, layername)
+			out, _ := geometry_raster(inputfile)
 
 			println("rasterise output:", out)
 		}
 
 	case "proximity":
 		{
-			if layername == "" {
-				panic("No -l (layername) given.")
-			}
-
-			r, _ := geometry_raster(inputfile, layername)
+			r, _ := geometry_raster(inputfile)
 
 			out, _ := proximity_raster(r)
 
@@ -133,10 +123,6 @@ func main() {
 
 	case "clip":
 		{
-			if layername == "" {
-				panic("No -l (layername) given.")
-			}
-
 			if targetfile == "" {
 				panic("No -t (targetfile) given:")
 			}
@@ -158,10 +144,6 @@ func main() {
 
 	case "vectors_routine":
 		{
-			if layername == "" {
-				panic("No -l (layername) given.")
-			}
-
 			if idattr == "" {
 				println("No -g (idattr) given. Will use 'OBJECTID'")
 				idattr = default_idattr
@@ -171,7 +153,7 @@ func main() {
 				panic("No -t (targetfile) given:")
 			}
 
-			vectors_routine(inputfile, targetfile, layername, []string{idattr})
+			vectors_routine(inputfile, targetfile, []string{idattr})
 		}
 
 	default:

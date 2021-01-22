@@ -15,7 +15,7 @@ func admin_boundaries(in filename, idattr string) {
 	println(info(stripped))
 }
 
-func vectors_routine(in filename, tg filename, layer string, idattrs []string) {
+func vectors_routine(in filename, tg filename, idattrs []string) {
 	stripped, err := strip(in, idattrs)
 	if err != nil {
 		panic(err)
@@ -28,7 +28,7 @@ func vectors_routine(in filename, tg filename, layer string, idattrs []string) {
 	}
 	println("clipped:", clipped)
 
-	rstr, err := geometry_raster(clipped, layer)
+	rstr, err := geometry_raster(clipped)
 	if err != nil {
 		panic(err)
 	}

@@ -38,7 +38,7 @@ func clip(in filename, bin filename) (filename, error) {
 	s := gdal.CreateSpatialReference("")
 	s.FromEPSG(default_epsg)
 
-	result := ds.CreateLayer(layername, s, source.Type(), []string{})
+	result := ds.CreateLayer("Layer0", s, source.Type(), []string{})
 
 	err := source.Intersection(target, result, []string{})
 	if err != nil {
