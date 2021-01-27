@@ -12,11 +12,12 @@ func ids_raster(in filename, gid string) (filename, error) {
 	//     value. The value will be burned into all output bands.
 	//
 	opts := []string{
-		"-tr", res, res,
 		"-a", gid,
+		"-a_nodata", "-1",
+		"-a_srs", "EPSG:3857",
+		"-tr", "1000", "1000",
 		"-of", "GTiff",
 		"-ot", "Int16",
-		"-a_nodata", "-1",
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
@@ -40,15 +41,13 @@ func ids_raster(in filename, gid string) (filename, error) {
 func geometry_raster(in filename) (filename, error) {
 	out := rand_filename()
 
-	lname := gdal.OpenDataSource(in, 0).LayerByIndex(0).Name()
-
 	opts := []string{
-		"-l", lname,
-		"-burn", "1",
-		"-ts", res, res, // get the bounds!
-		"-a_nodata", "0",
-		"-ot", "Byte",
+		"-burn", "0",
+		"-a_nodata", "-1",
+		"-a_srs", "EPSG:3857",
+		"-tr", "1000", "1000",
 		"-of", "GTiff",
+		"-ot", "Int16",
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
@@ -74,8 +73,10 @@ func proximity_raster(in filename) (filename, error) {
 
 	opts := []string{
 		"DISTUNITS=PIXEL",
+		"VALUES=1",
+		"NODATA=-1",
+		"USE_INPUT_NODATA=YES",
 		fmt.Sprintf("MAXDIST=%d", 512),
-		fmt.Sprintf("NODATA=%d", -1),
 	}
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
