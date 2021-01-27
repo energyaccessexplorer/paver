@@ -14,8 +14,8 @@ type dataset_info struct {
 }
 
 func featurecount(in filename) int {
-	source := gdal.OpenDataSource(in, 0).LayerByIndex(0)
-	cs, _ := source.FeatureCount(true)
+	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	cs, _ := src.FeatureCount(true)
 
 	return cs
 }
@@ -24,9 +24,9 @@ func bounds(in filename) gdal.Geometry {
 	t := gdal.CreateSpatialReference("")
 	t.FromEPSG(default_epsg)
 
-	source := gdal.OpenDataSource(in, 0)
+	src := gdal.OpenDataSource(in, 0)
 
-	layer := source.LayerByIndex(0)
+	layer := src.LayerByIndex(0)
 
 	env, err := layer.Extent(true)
 	if err != nil {

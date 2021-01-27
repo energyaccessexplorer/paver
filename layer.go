@@ -20,13 +20,13 @@ func fields(in filename) []string {
 	return a
 }
 
-func clip(in filename, bin filename) (filename, error) {
+func clip(in filename, container filename) (filename, error) {
 	out := rand_filename()
 
-	source := gdal.OpenDataSource(in, 0).LayerByIndex(0)
-	target := gdal.OpenDataSource(bin, 0).LayerByIndex(0)
+	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	tar := gdal.OpenDataSource(container, 0).LayerByIndex(0)
 
-	ct, _ := target.FeatureCount(true)
+	ct, _ := tar.FeatureCount(true)
 	if ct > 1 {
 		println("Counted", ct, "features in", in)
 		panic("Clipping only supports single-featured datasets")
@@ -38,9 +38,9 @@ func clip(in filename, bin filename) (filename, error) {
 	s := gdal.CreateSpatialReference("")
 	s.FromEPSG(default_epsg)
 
-	result := ds.CreateLayer("Layer0", s, source.Type(), []string{})
+	result := ds.CreateLayer("Layer0", s, src.Type(), []string{})
 
-	err := source.Intersection(target, result, []string{})
+	err := src.Intersection(tar, result, []string{})
 	if err != nil {
 		panic(err.Error())
 	}

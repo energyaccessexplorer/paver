@@ -22,13 +22,13 @@ func ids_raster(in filename, gid string) (filename, error) {
 		"-co", "ZLEVEL=9",
 	}
 
-	source, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
-	defer source.Close()
+	defer src.Close()
 
-	dest, err := gdal.Rasterize(out, source, opts)
+	dest, err := gdal.Rasterize(out, src, opts)
 	if err != nil {
 		return "", err
 	}
@@ -54,13 +54,13 @@ func geometry_raster(in filename) (filename, error) {
 		"-co", "ZLEVEL=9",
 	}
 
-	source, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	defer source.Close()
+	defer src.Close()
 
-	dest, err := gdal.Rasterize(out, source, opts)
+	dest, err := gdal.Rasterize(out, src, opts)
 	if err != nil {
 		panic(err)
 	}
@@ -78,7 +78,7 @@ func proximity_raster(in filename) (filename, error) {
 		fmt.Sprintf("NODATA=%d", -1),
 	}
 
-	source, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}
@@ -94,8 +94,8 @@ func proximity_raster(in filename) (filename, error) {
 		"ZLEVEL=9",
 	}
 
-	ds := drv.CreateCopy(out, source, 0, opts2, gdal.DummyProgress, nil)
-	err = source.
+	ds := drv.CreateCopy(out, src, 0, opts2, gdal.DummyProgress, nil)
+	err = src.
 		RasterBand(1).
 		ComputeProximity(ds.RasterBand(1), opts, gdal.DummyProgress, nil)
 

@@ -14,13 +14,13 @@ func strip(in filename, attrs []string) (filename, error) {
 		"-select", strings.Join(attrs, ","),
 	}
 
-	source, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
-	defer source.Close()
+	defer src.Close()
 
-	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{source}, opts)
+	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
 	if err != nil {
 		return "", err
 	}
