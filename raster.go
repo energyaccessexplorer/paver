@@ -38,19 +38,10 @@ func ids_raster(in filename, gid string) (filename, error) {
 	return out, err
 }
 
-func geometry_raster(in filename) (filename, error) {
-	out := rand_filename()
-
+func geometry_raster(in filename, dst filename) (filename, error) {
 	opts := []string{
-		"-burn", "0",
-		"-a_nodata", "-1",
-		"-a_srs", "EPSG:3857",
-		"-tr", "1000", "1000",
-		"-of", "GTiff",
-		"-ot", "Int16",
-		"-co", "COMPRESS=DEFLATE",
-		"-co", "PREDICTOR=1",
-		"-co", "ZLEVEL=9",
+		"-l", gdal.OpenDataSource(in, 0).LayerByIndex(0).Name(),
+		"-burn", "1",
 	}
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
@@ -59,13 +50,20 @@ func geometry_raster(in filename) (filename, error) {
 	}
 	defer src.Close()
 
-	dest, err := gdal.Rasterize(out, src, opts)
+	dest, err := gdal.OpenEx(dst, gdal.OFUpdate, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}
-	defer dest.Close()
 
-	return out, err
+	out, err := gdal.RasterizeOverwrite(dest, src, opts)
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+
+	// TODO: dest.Close() segfaults... defer o no defer below, no comprende
+
+	return dst, err
 }
 
 func proximity_raster(in filename) (filename, error) {
@@ -101,6 +99,36 @@ func proximity_raster(in filename) (filename, error) {
 		ComputeProximity(ds.RasterBand(1), opts, gdal.DummyProgress, nil)
 
 	ds.Close()
+
+	return out, err
+}
+
+func zeros_raster(in filename) (filename, error) {
+	out := rand_filename()
+
+	opts := []string{
+		"-burn", "0",
+		"-a_nodata", "-1",
+		"-a_srs", "EPSG:3857",
+		"-tr", "1000", "1000",
+		"-of", "GTiff",
+		"-ot", "Int16",
+		"-co", "COMPRESS=DEFLATE",
+		"-co", "PREDICTOR=1",
+		"-co", "ZLEVEL=9",
+	}
+
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	defer src.Close()
+
+	dest, err := gdal.Rasterize(out, src, opts)
+	if err != nil {
+		panic(err)
+	}
+	defer dest.Close()
 
 	return out, err
 }

@@ -10,13 +10,14 @@ import (
 )
 
 var (
-	idattr  string
+	idattr string
 
 	selectattrs arrayFlag
 
-	command    string
-	inputfile  string
-	targetfile string
+	command       string
+	inputfile     string
+	referencefile string
+	targetfile    string
 )
 
 var default_epsg = 4326
@@ -44,6 +45,7 @@ func parse_flags() {
 
 	flag.StringVar(&inputfile, "i", "", "File to be processed")
 	flag.StringVar(&targetfile, "t", "", "Target file to use as reference for clipping/cropping")
+	flag.StringVar(&referencefile, "r", "", "File to be used as reference")
 
 	flag.StringVar(&idattr, "g", default_idattr, "blah blah")
 
@@ -89,14 +91,22 @@ func main() {
 
 	case "rasterise":
 		{
-			out, _ := geometry_raster(inputfile)
+			if targetfile == "" {
+				panic("No -t (targetfile) given:")
+			}
+
+			out, _ := geometry_raster(inputfile, targetfile)
 
 			println("rasterise output:", out)
 		}
 
 	case "proximity":
 		{
-			r, _ := geometry_raster(inputfile)
+			if targetfile == "" {
+				panic("No -t (targetfile) given:")
+			}
+
+			r, _ := geometry_raster(inputfile, targetfile)
 
 			out, _ := proximity_raster(r)
 
@@ -147,7 +157,11 @@ func main() {
 				panic("No -t (targetfile) given:")
 			}
 
-			vectors_routine(inputfile, targetfile, []string{idattr})
+			if referencefile == "" {
+				panic("No -r (referencefile) given:")
+			}
+
+			vectors_routine(inputfile, targetfile, referencefile, []string{idattr})
 		}
 
 	default:
