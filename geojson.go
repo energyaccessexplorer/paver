@@ -10,7 +10,6 @@ func strip(in filename, attrs []string) (filename, error) {
 
 	opts := []string{
 		"-f", "GeoJSON",
-		"-simplify", res,
 		"-select", strings.Join(attrs, ","),
 	}
 

@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"github.com/satori/go.uuid"
 	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 )
 
 var (
-	res_arg int
-	res     string
 	idattr  string
 
 	selectattrs arrayFlag
@@ -48,12 +45,9 @@ func parse_flags() {
 	flag.StringVar(&inputfile, "i", "", "File to be processed")
 	flag.StringVar(&targetfile, "t", "", "Target file to use as reference for clipping/cropping")
 
-	flag.IntVar(&res_arg, "r", 1000, "Resolution to use for 'simplify")
 	flag.StringVar(&idattr, "g", default_idattr, "blah blah")
 
 	flag.Var(&selectattrs, "s", "Attributes to extract from the features")
-
-	res = strconv.Itoa(res_arg)
 
 	flag.Parse()
 }
