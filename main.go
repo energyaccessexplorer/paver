@@ -129,6 +129,17 @@ func main() {
 			println("clip output:", out)
 		}
 
+	case "csv":
+		{
+			if len(selectattrs) == 0 {
+				panic("No -s (select attributes) given.")
+			}
+
+			out, _ := csv(inputfile, selectattrs)
+
+			println("cvs output:", out)
+		}
+
 	case "admin_boundaries":
 		{
 			if idattr == "" {
