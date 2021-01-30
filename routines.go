@@ -45,4 +45,6 @@ func vectors_clipped_routine(in filename, tg filename, ref filename, idattrs []s
 		panic(err)
 	}
 	println("proximity_raster:", prox)
+
+	cleanup_files(zeros, rstr)
 }
