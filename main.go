@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"math/rand"
 	"strings"
 	"time"
@@ -22,8 +21,6 @@ var (
 
 var default_epsg = 4326
 var default_idattr = "OBJECTID"
-
-type filename = string
 
 // -ot For the output bands to be of the indicated data type. Defaults to
 //     Float64
@@ -52,10 +49,6 @@ func parse_flags() {
 	flag.Var(&selectattrs, "s", "Attributes to extract from the features")
 
 	flag.Parse()
-}
-
-func rand_filename() filename {
-	return "./outputs/" + uuid.Must(uuid.NewV4()).String()
 }
 
 func main() {
