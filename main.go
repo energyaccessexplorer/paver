@@ -146,7 +146,7 @@ func main() {
 			admin_boundaries(inputfile, idattr)
 		}
 
-	case "vectors_routine":
+	case "vectors_clipped_routine":
 		{
 			if idattr == "" {
 				println("No -g (idattr) given. Will use 'OBJECTID'")
@@ -161,7 +161,7 @@ func main() {
 				panic("No -r (referencefile) given:")
 			}
 
-			vectors_routine(inputfile, targetfile, referencefile, []string{idattr})
+			vectors_clipped_routine(inputfile, targetfile, referencefile, []string{idattr})
 		}
 
 	default:

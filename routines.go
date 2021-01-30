@@ -15,7 +15,7 @@ func admin_boundaries(in filename, idattr string) {
 	println(info(stripped))
 }
 
-func vectors_routine(in filename, tg filename, ref filename, idattrs []string) {
+func vectors_clipped_routine(in filename, tg filename, ref filename, idattrs []string) {
 	stripped, err := strip(in, idattrs)
 	if err != nil {
 		panic(err)
