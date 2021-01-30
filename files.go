@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/satori/go.uuid"
+	"io"
 	"os"
 )
 
@@ -22,4 +23,19 @@ func cleanup_files(files ...filename) {
 			fmt.Println(err)
 		}
 	}
+}
+
+func generate_file(payload string) (filename, error) {
+	file, err := os.Create(rand_filename())
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	_, err = io.WriteString(file, payload)
+	if err != nil {
+		return "", err
+	}
+
+	return file.Name(), file.Sync()
 }
