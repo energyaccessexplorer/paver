@@ -48,3 +48,31 @@ func vectors_clipped_routine(in filename, tg filename, ref filename, attrs []str
 
 	cleanup_files(zeros, rstr)
 }
+
+func vectors_routine(in filename, ref filename, attrs []string) {
+	stripped, err := strip(in, attrs)
+	if err != nil {
+		panic(err)
+	}
+	println("stripped:", stripped)
+
+	zeros, err := zeros_raster(ref)
+	if err != nil {
+		panic(err)
+	}
+	println("zeros:", zeros)
+
+	rstr, err := geometry_raster(in, zeros)
+	if err != nil {
+		panic(err)
+	}
+	println("rasterised:", rstr)
+
+	prox, err := proximity_raster(rstr)
+	if err != nil {
+		panic(err)
+	}
+	println("proximity_raster:", prox)
+
+	cleanup_files(zeros, rstr)
+}

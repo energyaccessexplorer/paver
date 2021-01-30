@@ -139,6 +139,20 @@ func main() {
 			admin_boundaries(inputfile, idattr)
 		}
 
+	case "vectors_routine":
+		{
+			if idattr == "" {
+				println("No -g (idattr) given. Will use 'OBJECTID'")
+				idattr = default_idattr
+			}
+
+			if referencefile == "" {
+				panic("No -r (referencefile) given:")
+			}
+
+			vectors_routine(inputfile, referencefile, []string{idattr})
+		}
+
 	case "vectors_clipped_routine":
 		{
 			if idattr == "" {
