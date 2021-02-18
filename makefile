@@ -6,5 +6,30 @@ build:
 
 clean:
 	-rm -f paver
+	-rm -f ./outputs/*
+
+cli:
+	@./paver -cli -c admin_boundaries \
+		-i ${POLYGON_SHP} \
+		-g DistrictID
+
+	@./paver -cli -c vectors_routine \
+		-i ${LINES_SHP} \
+		-r ${POLYGON_SHP} \
+		-t ${POLYGON_GEOJSON} \
+		-g full_id
+
+	@./paver -cli -c vectors_clipped_routine \
+		-i ${POINTS_GEOJSON} \
+		-r ${POLYGON_SHP} \
+		-t ${POLYGON_GEOJSON} \
+		-g iso
+
+	@./paver -cli -c csv \
+		-i ${POLYGON_SHP} \
+		-s DistrictID \
+		-s Radio
+
+	@ls -lh outputs
 
 all: clean build
