@@ -1,4 +1,12 @@
+default: clean build server
+
 build:
+	git checkout server-file-form-template.go
+
+	./replacer.rb \
+		server-file-form-template.go \
+		server-file-form-template.html
+
 	go fmt
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
@@ -7,6 +15,10 @@ build:
 clean:
 	-rm -f paver
 	-rm -f ./outputs/*
+
+server:
+	@rm -rf /tmp/paver-server.sock
+	@./paver -server -jwtkey 1234 -role admin -tmpdir /tmp -dir /tmp
 
 cli:
 	@./paver -cli -c admin_boundaries \

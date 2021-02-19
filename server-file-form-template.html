@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title></title>
+  </head>
+
+  <body>
+    <form method="post" action="/files" enctype="multipart/form-data">
+      <fieldset>
+        <input type="file"
+               name="file"
+               required>
+
+        <input type="submit"
+               value="Upload">
+      </fieldset>
+    </form>
+
+    <hr>
+
+    <form method="post" action="/files">
+      <fieldset>
+        <input type="text"
+               name="location"
+               placeholder="http://example.org/image.png">
+
+        <input type="submit"
+               value="Fetch">
+      </fieldset>
+    </form>
+  </body>
+</html>

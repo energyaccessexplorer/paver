@@ -5,13 +5,16 @@ import (
 )
 
 var (
+	run_server bool
 	run_cli    bool
 )
 
 func main() {
 	parse_flags()
 
-	if run_cli {
+	if run_server {
+		serve()
+	} else if run_cli {
 		cli()
 	} else {
 		panic("What am I supposed to do? I am a program.")
@@ -19,6 +22,7 @@ func main() {
 }
 
 func parse_flags() {
+	flag.BoolVar(&run_server, "server", false, "Should I server")
 	flag.BoolVar(&run_cli, "cli", false, "Should I CLI")
 
 	// CLI flags
@@ -33,7 +37,13 @@ func parse_flags() {
 
 	flag.Var(&selectattrs, "s", "Attributes to extract from the features")
 
+	// SERVER flags
+	//
+	flag.StringVar(&dir, "dir", ".", "Directory where uploads should be finally stored.")
+	flag.StringVar(&tmpdir, "tmpdir", ".", "Directory where uploads should be stored whilst uploading.")
 
+	flag.StringVar(&jwtkey, "jwtkey", "", "Secret key to check JWT's.")
+	flag.Var(&roles, "role", "Roles permitted in the JWT claims")
 
 	flag.Parse()
 }
