@@ -1,12 +1,6 @@
 default: clean build server
 
 build:
-	git checkout server-file-form-template.go
-
-	./replacer.rb \
-		server-file-form-template.go \
-		server-file-form-template.html
-
 	go fmt
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
