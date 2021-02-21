@@ -162,7 +162,12 @@ func catch(arr []byte) (fname filename, err error) {
 func snatch(location string) (fname string, err error) {
 	filename := uuid.NewV4().String()
 
-	fmt.Println(filename, location)
+	for _, x := range []string{"geojson", "shp", "tiff"} {
+		if strings.HasSuffix(location, "."+x) {
+			filename += "." + x
+			break
+		}
+	}
 
 	if status, ok := uri_test(location); !ok {
 		err = errors.New("Couldn't... I got '" + (strconv.Itoa(status)) + "' status code. :(")
