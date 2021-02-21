@@ -50,13 +50,14 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	case "POST":
 		q := r.URL.Query().Get("routine")
 		if q == "" {
-			io.WriteString(w, "routine query parameter is not optional")
 			w.WriteHeader(http.StatusMethodNotAllowed)
+			io.WriteString(w, "routine query parameter is not optional")
+			return
 		}
 
 		if rtn := server_routines[q]; rtn == nil {
-			io.WriteString(w, "don't know what you mean by: "+q)
 			w.WriteHeader(http.StatusMethodNotAllowed)
+			io.WriteString(w, "don't know what you mean by: "+q)
 		} else {
 			rtn(r)
 		}
