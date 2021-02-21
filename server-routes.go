@@ -5,13 +5,20 @@ import (
 	"net/http"
 )
 
+type server_routine func(*http.Request) (bool, error)
+
+var routines = map[string]server_routine{
+	"vectors_clipped": server_vectors_clipped,
+}
+
 func server_routes(mux *http.ServeMux) {
-	mux.HandleFunc("/files", files)
+	mux.HandleFunc("/files", _files)
+	mux.HandleFunc("/routines", _routines)
 
 	mux.Handle("/", http.FileServer(http.Dir("public/")))
 }
 
-func files(w http.ResponseWriter, r *http.Request) {
+func _files(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "POST":
 		f := formdata{
@@ -34,6 +41,26 @@ func files(w http.ResponseWriter, r *http.Request) {
 				io.WriteString(w, result)
 			}
 		}
+
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func _routines(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "OPTIONS":
+		w.Header().Set("Allow", "POST")
+		w.WriteHeader(http.StatusOK)
+
+	case "POST":
+		routine := r.URL.Query().Get("routine")
+		if routine == "" {
+			io.WriteString(w, "routine query parameter is not optional")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+
+		routines["routine"](r)
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
