@@ -138,29 +138,28 @@ func file_create(filename string) (f *os.File, filepath string, err error) {
 	return
 }
 
-func catch(f formdata, w http.ResponseWriter) (ok bool) {
+func catch(arr []byte) (fname filename, err error) {
 	filename := uuid.NewV4().String()
 
 	tmp_file, tmp_filepath, _ := file_create(filename)
 	defer tmp_file.Close()
 
-	if _, err := io.Copy(tmp_file, bytes.NewReader(f["file"])); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	if _, err := io.Copy(tmp_file, bytes.NewReader(arr)); err != nil {
+		return "", err
 	}
 
-	if err := os.Rename(tmp_filepath, dir+"/"+filename); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	fname = dir + "/" + filename
+
+	if err := os.Rename(tmp_filepath, fname); err != nil {
+		return "", err
 	}
 
-	io.WriteString(w, tmp_filepath+"\n")
+	fmt.Println(len(arr), tmp_filepath, ">>", fname)
 
-	return true
+	return fname, nil
 }
 
-func snatch(f formdata, w http.ResponseWriter) (fname string, err error) {
-	location := string(f["location"])
+func snatch(location string) (fname string, err error) {
 	filename := uuid.NewV4().String()
 
 	fmt.Println(filename, location)
@@ -172,24 +171,20 @@ func snatch(f formdata, w http.ResponseWriter) (fname string, err error) {
 
 	resp, e := http.Get(location)
 	if e != nil {
-		http.Error(w, e.Error(), http.StatusInternalServerError)
-		return
+		return "", e
 	}
 	defer resp.Body.Close()
 
-	file, filepath, err := file_create(filename)
+	file, fname, err := file_create(filename)
 	defer file.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 
 	if _, err := io.Copy(file, bytes.NewReader(body)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return "", err
 	}
 
-	io.WriteString(w, filepath+"\n")
-
-	return
+	return fname, nil
 }
 
 func form_parse(form *formdata, r *http.Request, w http.ResponseWriter) (err error) {
