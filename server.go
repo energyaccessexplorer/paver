@@ -187,7 +187,7 @@ func snatch(location string) (fname string, err error) {
 	return fname, nil
 }
 
-func form_parse(form *formdata, r *http.Request, w http.ResponseWriter) (err error) {
+func form_parse(form *formdata, r *http.Request) (err error) {
 	t := r.Header.Get("Content-Type")
 
 	if strings.HasPrefix(t, "multipart/form-data") {

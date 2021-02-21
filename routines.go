@@ -15,38 +15,40 @@ func admin_boundaries(in filename, idattr string) {
 	println(info(stripped))
 }
 
-func vectors_clipped_routine(in filename, tg filename, ref filename, attrs []string) {
+func vectors_clipped_routine(in filename, tg filename, ref filename, attrs []string) (bool, error) {
 	stripped, err := strip(in, attrs)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	println("stripped:", stripped)
 
 	zeros, err := zeros_raster(ref)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	println("zeros:", zeros)
 
 	clipped, err := clip(in, tg)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	println("clipped:", clipped)
 
 	rstr, err := geometry_raster(clipped, zeros)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	println("rasterised:", rstr)
 
 	prox, err := proximity_raster(rstr)
 	if err != nil {
-		panic(err)
+		return false, err
 	}
 	println("proximity_raster:", prox)
 
 	cleanup_files(zeros, rstr)
+
+	return true, nil
 }
 
 func vectors_routine(in filename, ref filename, attrs []string) {

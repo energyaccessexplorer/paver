@@ -19,7 +19,7 @@ func files(w http.ResponseWriter, r *http.Request) {
 			"location": nil,
 		}
 
-		form_parse(&f, r, w)
+		form_parse(&f, r)
 
 		if len(f["file"]) > 0 {
 			if result, err := catch(f["file"]); err != nil {
