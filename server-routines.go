@@ -5,6 +5,12 @@ import (
 	"strings"
 )
 
+type server_routine func(*http.Request) (bool, error)
+
+var server_routines = map[string]server_routine{
+	"vectors_clipped": server_vectors_clipped,
+}
+
 func server_vectors_clipped(r *http.Request) (bool, error) {
 	f := formdata{
 		"inputfile":     nil,

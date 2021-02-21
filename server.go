@@ -37,7 +37,7 @@ func serve() {
 	fmt.Printf("Role claim is: %s\n", roles)
 
 	mux := http.NewServeMux()
-	server_routes(mux)
+	server_endpoints(mux)
 
 	unixListener, err := net.Listen("unix", "/tmp/paver-server.sock")
 	if err != nil {
