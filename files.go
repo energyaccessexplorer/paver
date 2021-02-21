@@ -10,7 +10,8 @@ import (
 type filename = string
 
 func rand_filename() filename {
-	return "./outputs/" + uuid.Must(uuid.NewV4()).String()
+	u := uuid.NewV4().String()
+	return "./outputs/" + u
 }
 
 func cleanup_files(files ...filename) {

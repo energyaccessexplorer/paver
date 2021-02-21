@@ -139,7 +139,7 @@ func file_create(filename string) (f *os.File, filepath string, err error) {
 }
 
 func catch(f formdata, w http.ResponseWriter) (ok bool) {
-	filename := uuid.Must(uuid.NewV4()).String()
+	filename := uuid.NewV4().String()
 
 	tmp_file, tmp_filepath, _ := file_create(filename)
 	defer tmp_file.Close()
@@ -160,8 +160,8 @@ func catch(f formdata, w http.ResponseWriter) (ok bool) {
 }
 
 func snatch(f formdata, w http.ResponseWriter) (fname string, err error) {
-	filename := uuid.Must(uuid.NewV4()).String()
 	location := string(f["location"])
+	filename := uuid.NewV4().String()
 
 	fmt.Println(filename, location)
 

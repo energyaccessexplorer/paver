@@ -1,7 +1,7 @@
 package main
 
 import (
-	"./gdal"
+	"github.com/energyaccessexplorer/gdal"
 	"strings"
 )
 

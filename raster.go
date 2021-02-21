@@ -1,8 +1,8 @@
 package main
 
 import (
-	"./gdal"
 	"fmt"
+	"github.com/energyaccessexplorer/gdal"
 )
 
 func ids_raster(in filename, gid string) (filename, error) {

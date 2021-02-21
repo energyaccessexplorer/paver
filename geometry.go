@@ -1,11 +1,11 @@
 package main
 
 import (
-	"./gdal"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/energyaccessexplorer/gdal"
 	"strconv"
 	"strings"
 	"time"
