@@ -1,3 +1,5 @@
+include .env
+
 default: clean build server
 
 build:
