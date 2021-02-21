@@ -13,10 +13,10 @@ var server_routines = map[string]server_routine{
 
 func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 	f := formdata{
-		"inputfile":     nil,
-		"targetfile":    nil,
-		"referencefile": nil,
-		"attrs":         nil,
+		"dataseturl":   nil,
+		"boundaryurl":  nil,
+		"referenceurl": nil,
+		"attrs":        nil,
 	}
 
 	err := form_parse(&f, r)
@@ -24,14 +24,31 @@ func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 		return false, err
 	}
 
-	inputfile, _ := snatch(string(f["inputfile"]))
-	targetfile, _ := snatch(string(f["targetfile"]))
-	referencefile, _ := snatch(string(f["referencefile"]))
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return false, err
+	}
 
-	return vectors_clipped_routine(
+	boundaryfile, err := snatch(string(f["boundaryurl"]))
+	if err != nil {
+		return false, err
+	}
+
+	referencefile, err := snatch(string(f["referenceurl"]))
+	if err != nil {
+		return false, err
+	}
+
+	ok, err := vectors_clipped_routine(
 		inputfile,
-		targetfile,
+		boundaryfile,
 		referencefile,
 		strings.Split(string(f["attrs"]), ","),
 	)
+
+	if !ok {
+		return false, err
+	}
+
+	return true, nil
 }

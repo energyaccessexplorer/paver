@@ -59,7 +59,10 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			io.WriteString(w, "don't know what you mean by: "+q)
 		} else {
-			rtn(r)
+			if ok, err := rtn(r); !ok {
+				w.WriteHeader(http.StatusInternalServerError)
+				io.WriteString(w, err.Error())
+			}
 		}
 
 	default:

@@ -170,7 +170,7 @@ func snatch(location string) (fname string, err error) {
 	}
 
 	if status, ok := uri_test(location); !ok {
-		err = errors.New("Couldn't... I got '" + (strconv.Itoa(status)) + "' status code. :(")
+		err = errors.New("Couldn not fetch '" + location + "' - Error: " + strconv.Itoa(status))
 		return
 	}
 
