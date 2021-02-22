@@ -25,15 +25,6 @@ function datasetinput(oldinput) {
 		label: 'dataseturl',
 		info: 'What dataset are we working with? (GEOJSON)',
 		before: _ => oldinput.remove(),
-		after: targetinput,
-	});
-};
-
-function targetinput(oldinput) {
-	return inputs.url({
-		label: 'boundaryurl',
-		info: "The dataset we will use to clip the previous dataset (generally a GEOJSON)",
-		before: _ => oldinput.remove(),
 		after: referenceinput,
 	});
 };
