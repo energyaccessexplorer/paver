@@ -25,15 +25,6 @@ function datasetinput(oldinput) {
 		label: 'dataseturl',
 		info: 'What dataset are we working with? (GEOJSON)',
 		before: _ => oldinput.remove(),
-		after: referenceinput,
-	});
-};
-
-function referenceinput(oldinput) {
-	return inputs.url({
-		label: 'referenceurl',
-		info: "The dataset we will use to generate the rasterized version (generally a SHP)",
-		before: _ => oldinput.remove(),
 		after: submit,
 	});
 };

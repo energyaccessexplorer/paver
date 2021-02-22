@@ -157,15 +157,11 @@ func cli() {
 				idattr = default_idattr
 			}
 
-			if targetfile == "" {
-				panic("No -t (targetfile) given:")
-			}
-
 			if referencefile == "" {
 				panic("No -r (referencefile) given:")
 			}
 
-			vectors_clipped_routine(inputfile, targetfile, referencefile, []string{idattr})
+			vectors_clipped_routine(inputfile, referencefile, []string{idattr})
 		}
 
 	default:

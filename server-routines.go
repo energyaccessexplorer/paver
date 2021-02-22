@@ -14,7 +14,6 @@ var server_routines = map[string]server_routine{
 func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 	f := formdata{
 		"dataseturl":   nil,
-		"boundaryurl":  nil,
 		"referenceurl": nil,
 		"attrs":        nil,
 	}
@@ -29,12 +28,7 @@ func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 		return false, err
 	}
 
-	boundaryfile, err := snatch(string(f["boundaryurl"]))
-	if err != nil {
-		return false, err
-	}
-
-	referencefile, err := snatch(string(f["referenceurl"]))
+	boundaryfile, err := snatch(string(f["referenceurl"]))
 	if err != nil {
 		return false, err
 	}
@@ -42,7 +36,6 @@ func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 	ok, err := vectors_clipped_routine(
 		inputfile,
 		boundaryfile,
-		referencefile,
 		strings.Split(string(f["attrs"]), ","),
 	)
 

@@ -17,7 +17,7 @@ func admin_boundaries(in filename, idattr string) (bool, error) {
 	return true, nil
 }
 
-func vectors_clipped_routine(in filename, tg filename, ref filename, attrs []string) (bool, error) {
+func vectors_clipped_routine(in filename, ref filename, attrs []string) (bool, error) {
 	stripped, err := strip(in, attrs)
 	if err != nil {
 		return false, err
@@ -30,7 +30,7 @@ func vectors_clipped_routine(in filename, tg filename, ref filename, attrs []str
 	}
 	println("zeros:", zeros)
 
-	clipped, err := clip(in, tg)
+	clipped, err := clip(in, ref)
 	if err != nil {
 		return false, err
 	}

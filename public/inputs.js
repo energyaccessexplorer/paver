@@ -24,7 +24,7 @@ export async function geographies({after}) {
 		const geo = geos.find(x => x['cca3'] === this.value);
 
 		payload['geographyid'] = geo['id'];
-		payload['boundaryurl'] = geo['boundary']['endpoint'];
+		payload['referenceurl'] = geo['boundary']['endpoint'];
 
 		if (typeof after === 'function') after(this);
 	});
