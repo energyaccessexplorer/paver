@@ -17,7 +17,7 @@ func main() {
 	} else if run_cli {
 		cli()
 	} else {
-		panic("What am I supposed to do? I am a program.")
+		panic("What am I supposed to do? I am just a program.")
 	}
 }
 

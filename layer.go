@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/energyaccessexplorer/gdal"
 )
 
@@ -29,7 +30,7 @@ func clip(in filename, container filename) (filename, error) {
 	ct, _ := tar.FeatureCount(true)
 	if ct > 1 {
 		println("Counted", ct, "features in", in)
-		panic("Clipping only supports single-featured datasets")
+		return "", errors.New("Clipping only supports single-featured datasets")
 	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")
@@ -42,7 +43,7 @@ func clip(in filename, container filename) (filename, error) {
 
 	err := src.Intersection(tar, result, []string{})
 	if err != nil {
-		panic(err.Error())
+		return "", err
 	}
 
 	ds.Destroy()
