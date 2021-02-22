@@ -2,11 +2,12 @@ const origin = "https://api.energyaccessexplorer.org";
 const storage = "https://wri-public-data.s3.amazonaws.com/EnergyAccess/";
 
 const form = document.querySelector('#not-a-form-form');
-const instructions = document.querySelector('h4');
+const instructions = document.querySelector('#instructions');
 const infopre = document.querySelector('pre');
 
 export async function geographies({after}) {
-	const geos = await fetch(origin + "/geographies?select=id,name,cca3,boundary(id,endpoint)&boundary_file=not.is.null")
+	const path = "/geographies?select=id,name,cca3,boundary(id,endpoint)&boundary_file=not.is.null";
+	const geos = await fetch(origin + path)
 				.then(r => r.json());
 
 	const sl = new selectlist(
@@ -19,7 +20,7 @@ export async function geographies({after}) {
 
 	form.append(sl.input);
 
-	sl.input.addEventListener('input', function(e) {
+	sl.input.addEventListener('change', function(e) {
 		const geo = geos.find(x => x['cca3'] === this.value);
 
 		payload['geographyid'] = geo['id'];
@@ -32,11 +33,12 @@ export async function geographies({after}) {
 
 	instructions.innerText = "Pick a geography";
 
-	infopre.innerText = "If a geography is no on the list, it probably means it does not have a boundary_file set";
+	infopre.innerText = "If a geography is not on the list, it probably means it does not have a boundary_file set";
 };
 
 export async function datasetid({before, after}) {
-	const datas = await fetch(origin + `/datasets?select=id,name,category_name&geography_id=eq.${payload['geographyid']}`)
+	const path = `/datasets?select=id,name,category_name&geography_id=eq.${payload['geographyid']}`;
+	const datas = await fetch(origin + path)
 				.then(r => r.json());
 
 	const sl = new selectlist(
@@ -50,7 +52,7 @@ export async function datasetid({before, after}) {
 	if (typeof before === 'function') before();
 	form.prepend(sl.input);
 
-	sl.input.addEventListener('input', function(e) {
+	sl.input.addEventListener('change', function(e) {
 		payload['datasetid'] = this.value;
 		if (typeof after === 'function') after(this);
 	});
@@ -76,7 +78,7 @@ export async function url({label = "<unset>", info = "", before, after}) {
 
 	input.focus();
 
-	input.addEventListener('input', async function(e) {
+	input.addEventListener('change', async function(e) {
 		const response = await fetch(this.value, {
 		  method: "HEAD"
 		}).catch(err => {
