@@ -118,7 +118,12 @@ func zeros_raster(in filename) (filename, error) {
 		"-co", "ZLEVEL=9",
 	}
 
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	pin, err := reproject(in)
+	if err != nil {
+		panic(err)
+	}
+
+	src, err := gdal.OpenEx(pin, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}

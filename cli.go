@@ -50,6 +50,13 @@ func cli() {
 			fmt.Println("info:", info(inputfile))
 		}
 
+	case "zeros":
+		{
+			out, _ := zeros_raster(inputfile)
+
+			println("zeroes output:", out)
+		}
+
 	case "strip":
 		{
 			if len(selectattrs) == 0 {
