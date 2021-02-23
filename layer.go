@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"github.com/energyaccessexplorer/gdal"
+	"strconv"
 )
 
 func fields(in filename) []string {
@@ -29,8 +30,7 @@ func clip(in filename, container filename) (filename, error) {
 
 	ct, _ := tar.FeatureCount(true)
 	if ct > 1 {
-		println("Counted", ct, "features in", in)
-		return "", errors.New("Clipping only supports single-featured datasets")
+		return "", errors.New("Clipping only supports single-featured reference datasets. Got " + strconv.Itoa(ct))
 	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")
