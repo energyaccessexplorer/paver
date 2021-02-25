@@ -29,14 +29,12 @@ cli:
 
 	@./paver -cli -c vectors_routine \
 		-i ${LINES_SHP} \
-		-r ${POLYGON_SHP} \
-		-t ${POLYGON_GEOJSON} \
+		-r ${POLYGON_GEOJSON} \
 		-g full_id
 
 	@./paver -cli -c vectors_clipped_routine \
 		-i ${POINTS_GEOJSON} \
-		-r ${POLYGON_SHP} \
-		-t ${POLYGON_GEOJSON} \
+		-r ${POLYGON_GEOJSON} \
 		-g iso
 
 	@./paver -cli -c csv \
