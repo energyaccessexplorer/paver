@@ -19,3 +19,19 @@ input {
 pre {
   white-space: pre-wrap;
 }
+
+tb-loading {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 100%;
+  background-color: rgba(0,0,0,0.6);
+  text-align: center;
+}
+
+body > tb-loading > .spinner {
+  width: 120px;
+  height: 120px;
+}

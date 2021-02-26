@@ -7,6 +7,42 @@
   </head>
 
   <body>
+	<tb-loading>
+	  <style>
+		.spinner {
+		  display: inline-block;
+		  border: 2px solid #333;
+		  border-radius: 50%;
+		  border-bottom: 3px solid #f1f1f1;
+		  animation: spin 2s linear infinite;
+		  width: 48px;
+		  height: 48px;
+		  margin: auto auto;
+		  margin-top: 1em;
+		  box-shadow: 0px 1px 2px rgba(0,0,0,0.3);
+		}
+
+		p {
+		  color: #f1f1f1;
+		  font-size: medium;
+		  text-shadow: 0px 1px 5px rgba(0,0,0,0.3);
+		}
+
+		@keyframes spin {
+		  0% {
+			transform: rotate(0deg);
+		  }
+
+		  100% {
+			transform: rotate(360deg);
+		  }
+		}
+	  </style>
+
+	  <div class="spinner"></div>
+	  <p>Loading data...</p>
+	</tb-loading>
+
 	<header></header>
 	<p id="instructions"></p>
 	<div id="not-a-form-form"></div>

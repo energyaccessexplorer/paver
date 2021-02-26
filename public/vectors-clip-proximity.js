@@ -32,11 +32,15 @@ function datasetinput(oldinput) {
 async function submit() {
 	var body = [];
 
+	const loading = document.querySelector('tb-loading');
+
 	for (var p in payload)
 		body.push(encodeURIComponent(p) +
 							"=" +
 							encodeURIComponent(payload[p]));
 
+
+	loading.style.display = 'block';
 
 	const response = await fetch('/routines?routine=vectors_clip_proximity', {
 		method: 'POST',
@@ -47,6 +51,8 @@ async function submit() {
 	});
 
 	inputs.infoerror(response);
+
+	loading.style.display = '';
 };
 
 export function start() {
