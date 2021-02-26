@@ -34,6 +34,7 @@ func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 	}
 
 	ok, err := vectors_clipped_routine(
+		r,
 		inputfile,
 		boundaryfile,
 		strings.Split(string(f["attrs"]), ","),

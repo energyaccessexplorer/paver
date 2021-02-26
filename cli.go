@@ -161,7 +161,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			vectors_clipped_routine(inputfile, referencefile, []string{idattr})
+			vectors_clipped_routine(nil, inputfile, referencefile, []string{idattr})
 		}
 
 	default:

@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"nhooyr.io/websocket"
 	"os"
 	"strconv"
 	"strings"
@@ -39,13 +40,13 @@ func serve() {
 	mux := http.NewServeMux()
 	server_endpoints(mux)
 
-	unixListener, err := net.Listen("unix", "/tmp/paver-server.sock")
+	l, err := net.Listen("unix", "/tmp/paver-server.sock")
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Listening on socket:", "/tmp/paver-server.sock")
-	panic(http.Serve(unixListener, mux))
+	panic(http.Serve(l, mux))
 }
 
 func check_server_flags() {
@@ -231,4 +232,14 @@ func form_parse(form *formdata, r *http.Request) (err error) {
 	}
 
 	return err
+}
+
+func socketwrite(m string, r *http.Request) {
+	if r == nil {
+		fmt.Println(m)
+		return
+	}
+
+	ctx := r.Context()
+	socket.Write(ctx, websocket.MessageText, []byte(m))
 }

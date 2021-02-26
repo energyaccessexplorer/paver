@@ -1,5 +1,10 @@
 package main
 
+import (
+	"fmt"
+	"net/http"
+)
+
 func admin_boundaries(in filename, idattr string) (bool, error) {
 	ids, err := ids_raster(in, idattr)
 	if err != nil {
@@ -17,36 +22,36 @@ func admin_boundaries(in filename, idattr string) (bool, error) {
 	return true, nil
 }
 
-func vectors_clipped_routine(in filename, ref filename, attrs []string) (bool, error) {
+func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs []string) (bool, error) {
 	stripped, err := strip(in, attrs)
 	if err != nil {
 		return false, err
 	}
-	println("stripped:", stripped)
+	socketwrite(fmt.Sprintf("%s <- stripped", stripped), r)
 
 	zeros, err := zeros_raster(ref)
 	if err != nil {
 		return false, err
 	}
-	println("zeros:", zeros)
+	socketwrite(fmt.Sprintf("%s <- zeros", zeros), r)
 
 	clipped, err := clip(in, ref)
 	if err != nil {
 		return false, err
 	}
-	println("clipped:", clipped)
+	socketwrite(fmt.Sprintf("%s <- clipped", clipped), r)
 
 	rstr, err := geometry_raster(clipped, zeros)
 	if err != nil {
 		return false, err
 	}
-	println("rasterised:", rstr)
+	socketwrite(fmt.Sprintf("%s <- rasterised", rstr), r)
 
 	prox, err := proximity_raster(rstr)
 	if err != nil {
 		return false, err
 	}
-	println("proximity_raster:", prox)
+	socketwrite(fmt.Sprintf("%s <- proximity", prox), r)
 
 	cleanup_files(zeros, rstr)
 

@@ -1,12 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"net/http"
+	"nhooyr.io/websocket"
+	"time"
+)
+
+var (
+	socket *websocket.Conn
 )
 
 func server_endpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/files", _files)
+	mux.HandleFunc("/socket", _socket)
 	mux.HandleFunc("/routines", _routines)
 
 	mux.Handle("/", http.FileServer(http.Dir("public/")))
@@ -67,5 +75,26 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func _socket(w http.ResponseWriter, r *http.Request) {
+	var err error
+
+	socket, err = websocket.Accept(w, r, nil)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return
+	}
+	defer socket.Close(websocket.StatusNormalClosure, "done!")
+
+	count := 0
+	for {
+		time.Sleep(10 * time.Second)
+		if count > 9 {
+			break
+		}
+
+		count += 1
 	}
 }

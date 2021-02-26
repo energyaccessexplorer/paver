@@ -2,13 +2,14 @@ import '/lib/selectlist.js';
 
 import * as inputs from '/inputs.js';
 
+import {socketlisten} from '/socket.js';
+
 const header = document.querySelector('header');
 
 window.payload = {
 	geographyid: null,
 	datasetid: null,
 	dataseturl: null,
-	boundaryurl: null,
 	referenceurl: null,
 	attrs: "name",
 };
@@ -33,6 +34,7 @@ async function submit() {
 	var body = [];
 
 	const loading = document.querySelector('tb-loading');
+	const infopre = document.querySelector('pre');
 
 	for (var p in payload)
 		body.push(encodeURIComponent(p) +
@@ -41,6 +43,9 @@ async function submit() {
 
 
 	loading.style.display = 'block';
+	infopre.innerText = "";
+
+	socketlisten(m => infopre.innerText += "\n" + m);
 
 	const response = await fetch('/routines?routine=vectors_clip_proximity', {
 		method: 'POST',
