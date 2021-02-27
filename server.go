@@ -138,27 +138,6 @@ func file_create(filename string) (f *os.File, filepath string, err error) {
 	return
 }
 
-func catch(arr []byte) (fname filename, err error) {
-	filename := rand_filename()
-
-	tmp_file, tmp_filepath, _ := file_create(filename)
-	defer tmp_file.Close()
-
-	if _, err := io.Copy(tmp_file, bytes.NewReader(arr)); err != nil {
-		return "", err
-	}
-
-	fname = dir + "/" + filename
-
-	if err := os.Rename(tmp_filepath, fname); err != nil {
-		return "", err
-	}
-
-	fmt.Println(len(arr), tmp_filepath, ">>", fname)
-
-	return fname, nil
-}
-
 func snatch(location string) (fname string, err error) {
 	fname = rand_filename()
 

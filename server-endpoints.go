@@ -30,13 +30,7 @@ func _files(w http.ResponseWriter, r *http.Request) {
 
 		form_parse(&f, r)
 
-		if len(f["file"]) > 0 {
-			if result, err := catch(f["file"]); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			} else {
-				io.WriteString(w, result)
-			}
-		} else if len(f["location"]) > 0 {
+		if len(f["location"]) > 0 {
 			if result, err := snatch(string(f["location"])); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			} else {
