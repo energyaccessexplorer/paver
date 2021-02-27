@@ -16,6 +16,7 @@ var (
 type server_routine func(*http.Request) (bool, error)
 
 var server_routines = map[string]server_routine{
+	"admin-boundaries": server_admin_boundaries,
 	"clip-proximity":   server_clip_proximity,
 }
 
@@ -74,6 +75,29 @@ func server_endpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/routines", _routines)
 
 	mux.Handle("/", http.FileServer(http.Dir("public/")))
+}
+
+func server_admin_boundaries(r *http.Request) (bool, error) {
+	f := formdata{
+		"dataseturl": nil,
+		"attr":       nil,
+	}
+
+	err := form_parse(&f, r)
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return false, err
+	}
+
+	if ok, err := routine_admin_boundaries(
+		r,
+		inputfile,
+		string(f["attr"]),
+	); !ok {
+		return false, err
+	}
+
+	return true, nil
 }
 
 func server_clip_proximity(r *http.Request) (bool, error) {
