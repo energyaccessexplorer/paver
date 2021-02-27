@@ -1,12 +1,14 @@
 package main
 
 import (
+	"errors"
 	"github.com/energyaccessexplorer/gdal"
 	"os"
+	"strconv"
 	"strings"
 )
 
-func strip(in filename, attrs []string) (filename, error) {
+func vectors_strip(in filename, attrs []string) (filename, error) {
 	out := _filename()
 
 	opts := []string{
@@ -29,7 +31,7 @@ func strip(in filename, attrs []string) (filename, error) {
 	return out, err
 }
 
-func reproject(in filename) (filename, error) {
+func vectors_reproject(in filename) (filename, error) {
 	out := _filename()
 
 	opts := []string{
@@ -53,4 +55,33 @@ func reproject(in filename) (filename, error) {
 	os.Rename(out+".geojson", out)
 
 	return out, nil
+}
+
+func vectors_clip(in filename, container filename) (filename, error) {
+	out := _filename()
+
+	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	tar := gdal.OpenDataSource(container, 0).LayerByIndex(0)
+
+	ct, _ := tar.FeatureCount(true)
+	if ct > 1 {
+		return "", errors.New("Clipping only supports single-featured reference datasets. Got " + strconv.Itoa(ct))
+	}
+
+	drv := gdal.OGRDriverByName("GeoJSON")
+	ds, _ := drv.Create(out, []string{})
+
+	s := gdal.CreateSpatialReference("")
+	s.FromEPSG(default_epsg)
+
+	result := ds.CreateLayer("Layer0", s, src.Type(), []string{})
+
+	err := src.Clip(tar, result, []string{})
+	if err != nil {
+		return "", err
+	}
+
+	ds.Destroy()
+
+	return out, err
 }

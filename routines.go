@@ -12,7 +12,7 @@ func admin_boundaries(in filename, idattr string) (bool, error) {
 	}
 	println("ids_raster:", ids)
 
-	stripped, err := strip(in, []string{idattr})
+	stripped, err := vectors_strip(in, []string{idattr})
 	if err != nil {
 		return false, err
 	}
@@ -23,13 +23,13 @@ func admin_boundaries(in filename, idattr string) (bool, error) {
 }
 
 func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs []string) (bool, error) {
-	stripped, err := strip(in, attrs)
+	stripped, err := vectors_strip(in, attrs)
 	if err != nil {
 		return false, err
 	}
 	socketwrite(fmt.Sprintf("%s <- stripped", stripped), r)
 
-	refprj, err := reproject(ref)
+	refprj, err := vectors_reproject(ref)
 	if err != nil {
 		return false, err
 	}
@@ -41,7 +41,7 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- zeros", zeros), r)
 
-	clipped, err := clip(stripped, ref)
+	clipped, err := vectors_clip(stripped, ref)
 	if err != nil {
 		return false, err
 	}
@@ -77,7 +77,7 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 }
 
 func vectors_routine(in filename, ref filename, attrs []string) (bool, error) {
-	stripped, err := strip(in, attrs)
+	stripped, err := vectors_strip(in, attrs)
 	if err != nil {
 		return false, err
 	}

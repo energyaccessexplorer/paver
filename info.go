@@ -69,11 +69,27 @@ func info_bounds(in filename) gdal.Geometry {
 	return g
 }
 
+func info_fields(in filename) []string {
+	fdef := gdal.
+		OpenDataSource(in, 0).
+		LayerByIndex(0).
+		Definition()
+
+	c := fdef.FieldCount()
+	a := make([]string, c)
+
+	for i := 0; i < c; i++ {
+		a[i] = fdef.FieldDefinition(i).Name()
+	}
+
+	return a
+}
+
 func info(in filename) string {
 	e := info_bounds(in).Envelope()
 
 	i := dataset_info{
-		fields(in),
+		info_fields(in),
 		info_featurecount(in),
 		[4]float64{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
 	}

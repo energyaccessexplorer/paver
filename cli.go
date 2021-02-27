@@ -63,7 +63,7 @@ func cli() {
 				panic("No -s (select attributes) given.")
 			}
 
-			out, _ := strip(inputfile, selectattrs)
+			out, _ := vectors_strip(inputfile, selectattrs)
 
 			println("strip output:", out)
 		}
@@ -110,7 +110,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, _ := clip(inputfile, targetfile)
+			out, _ := vectors_clip(inputfile, targetfile)
 
 			println("clip output:", out)
 		}
