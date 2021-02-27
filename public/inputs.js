@@ -5,7 +5,7 @@ const form = document.querySelector('#not-a-form-form');
 const instructions = document.querySelector('#instructions');
 const infopre = document.querySelector('pre');
 
-export async function geographies({after}) {
+export async function geographies({after, payload}) {
 	const path = "/geographies?select=id,name,cca3,boundary(id,endpoint)&boundary_file=not.is.null";
 	const geos = await fetch(origin + path)
 				.then(r => r.json());
@@ -36,7 +36,7 @@ export async function geographies({after}) {
 	infopre.innerText = "If a geography is not on the list, it probably means it does not have a boundary_file set";
 };
 
-export async function datasetid({before, after}) {
+export async function datasetid({before, after, payload}) {
 	const path = `/datasets?select=id,name,category_name&geography_id=eq.${payload['geographyid']}`;
 	const datas = await fetch(origin + path)
 				.then(r => r.json());
@@ -64,7 +64,7 @@ export async function datasetid({before, after}) {
 	infopre.innerText = "This will one day automatically relate the generated files with this dataset...";
 };
 
-export async function url({label = "<unset>", info = "", before, after}) {
+export async function url({label = "<unset>", info = "", before, after, payload}) {
 	const input = document.createElement('input');
 	input.setAttribute('required', '');
 	input.setAttribute('type', 'url');

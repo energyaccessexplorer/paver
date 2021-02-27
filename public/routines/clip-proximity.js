@@ -15,12 +15,16 @@ const payload = {
 	attrs: "name",
 };
 
-inputs.geographies({ after: x => datasetid(x) });
+inputs.geographies({
+	after: x => datasetid(x),
+	payload
+});
 
 function datasetid(oldinput) {
 	return inputs.datasetid({
 		before: _ => oldinput.remove(),
-		after: t => datasetinput(t)
+		after: t => datasetinput(t),
+		payload
 	});
 };
 
@@ -30,6 +34,7 @@ function datasetinput(oldinput) {
 		info: 'What dataset are we working with? (GEOJSON)',
 		before: _ => oldinput.remove(),
 		after: submit,
+		payload
 	});
 };
 
