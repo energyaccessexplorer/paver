@@ -8,10 +8,10 @@ import (
 type server_routine func(*http.Request) (bool, error)
 
 var server_routines = map[string]server_routine{
-	"vectors_clip_proximity": server_vectors_clip_proximity,
+	"clip-proximity":   server_clip_proximity,
 }
 
-func server_vectors_clip_proximity(r *http.Request) (bool, error) {
+func server_clip_proximity(r *http.Request) (bool, error) {
 	f := formdata{
 		"dataseturl":   nil,
 		"referenceurl": nil,

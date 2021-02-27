@@ -5,14 +5,17 @@ import * as inputs from '../inputs.js';
 import {socketlisten} from '../socket.js';
 
 const header = document.querySelector('header');
+header.innerText = "Clip/Proximity";
 
-window.payload = {
+const payload = {
 	geographyid: null,
 	datasetid: null,
 	dataseturl: null,
 	referenceurl: null,
 	attrs: "name",
 };
+
+inputs.geographies({ after: x => datasetid(x) });
 
 function datasetid(oldinput) {
 	return inputs.datasetid({
@@ -58,10 +61,4 @@ async function submit() {
 	inputs.infoerror(response);
 
 	loading.style.display = '';
-};
-
-export function start() {
-	header.innerText = "Vectors/Proximity";
-
-	inputs.geographies({ after: x => datasetid(x) });
 };

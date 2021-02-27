@@ -46,11 +46,16 @@
 	<header></header>
 	<p id="instructions"></p>
 	<div id="not-a-form-form"></div>
-	<pre id="information">
+	<pre id="information"></pre>
   </body>
 
   <script type="module">
-	import * as routine from './clip-proximity.js';
-	routine.start();
+	const s = document.createElement('script');
+	const u = new URL(location);
+	s.src = u.searchParams.get('r') + ".js";
+	s.type = "module";
+	s.onerror = _ => alert("nope...");
+
+	document.head.append(s);
   </script>
 </html>
