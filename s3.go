@@ -7,7 +7,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"github.com/satori/go.uuid"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -37,7 +36,7 @@ func s3sign(strs ...string) string {
 }
 
 func s3put(fname filename) bool {
-	target := uuid.NewV4().String()
+	target := fname
 
 	file, err := os.Open(fname)
 	if err != nil {

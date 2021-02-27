@@ -35,25 +35,25 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- zeros", zeros), r)
 
-	clipped, err := clip(in, ref)
+	clipped, err := clip(stripped, ref)
 	if err != nil {
 		return false, err
 	}
-	socketwrite(fmt.Sprintf("%s <- clipped", clipped), r)
+	socketwrite(fmt.Sprintf("%s <- *clipped", clipped), r)
 
 	rstr, err := geometry_raster(clipped, zeros)
 	if err != nil {
 		return false, err
 	}
-	socketwrite(fmt.Sprintf("%s <- rasterised", rstr), r)
+	socketwrite(fmt.Sprintf("%s <- rasterised <- zeros", rstr), r)
 
 	prox, err := proximity_raster(rstr)
 	if err != nil {
 		return false, err
 	}
-	socketwrite(fmt.Sprintf("%s <- proximity", prox), r)
+	socketwrite(fmt.Sprintf("%s <- *proximity", prox), r)
 
-	cleanup_files(zeros, rstr)
+	cleanup_files(zeros, stripped, rstr)
 
 	return true, nil
 }

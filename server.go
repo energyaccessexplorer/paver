@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/satori/go.uuid"
 	"io"
 	"io/ioutil"
 	"log"
@@ -140,7 +139,7 @@ func file_create(filename string) (f *os.File, filepath string, err error) {
 }
 
 func catch(arr []byte) (fname filename, err error) {
-	filename := uuid.NewV4().String()
+	filename := rand_filename()
 
 	tmp_file, tmp_filepath, _ := file_create(filename)
 	defer tmp_file.Close()
@@ -161,11 +160,11 @@ func catch(arr []byte) (fname filename, err error) {
 }
 
 func snatch(location string) (fname string, err error) {
-	filename := uuid.NewV4().String()
+	fname = rand_filename()
 
 	for _, x := range []string{"geojson", "shp", "tiff"} {
 		if strings.HasSuffix(location, "."+x) {
-			filename += "." + x
+			fname += "." + x
 			break
 		}
 	}

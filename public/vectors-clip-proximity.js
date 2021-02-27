@@ -63,7 +63,5 @@ async function submit() {
 export function start() {
 	header.innerText = "Vectors/Proximity";
 
-	inputs.geographies({
-		after: x => datasetid(x)
-	});
+	inputs.geographies({ after: x => datasetid(x) });
 };

@@ -41,7 +41,7 @@ func clip(in filename, container filename) (filename, error) {
 
 	result := ds.CreateLayer("Layer0", s, src.Type(), []string{})
 
-	err := src.Intersection(tar, result, []string{})
+	err := src.Clip(tar, result, []string{})
 	if err != nil {
 		return "", err
 	}
