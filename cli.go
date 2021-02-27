@@ -133,21 +133,7 @@ func cli() {
 				idattr = default_idattr
 			}
 
-			admin_boundaries(inputfile, idattr)
-		}
-
-	case "vectors_routine":
-		{
-			if idattr == "" {
-				println("No -g (idattr) given. Will use 'OBJECTID'")
-				idattr = default_idattr
-			}
-
-			if referencefile == "" {
-				panic("No -r (referencefile) given:")
-			}
-
-			vectors_routine(inputfile, referencefile, []string{idattr})
+			routine_admin_boundaries(nil, inputfile, idattr)
 		}
 
 	case "routine_clip_proximity":

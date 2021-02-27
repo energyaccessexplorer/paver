@@ -33,14 +33,12 @@ func server_clip_proximity(r *http.Request) (bool, error) {
 		return false, err
 	}
 
-	ok, err := routine_clip_proximity(
+	if ok, err := routine_clip_proximity(
 		r,
 		inputfile,
 		referencefile,
 		strings.Split(string(f["attrs"]), ","),
-	)
-
-	if !ok {
+	); !ok {
 		return false, err
 	}
 

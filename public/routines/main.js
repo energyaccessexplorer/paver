@@ -2,19 +2,17 @@ import * as socket from '../socket.js';
 
 import * as inputs from '../inputs.js';
 
-let payload;
-window.payload = payload;
+const loading = document.querySelector('tb-loading');
+const infopre = document.querySelector('pre');
+
+let _payload;
 
 export async function submit(r) {
 	var body = [];
-
-	const loading = document.querySelector('tb-loading');
-	const infopre = document.querySelector('pre');
-
-	for (var p in payload)
+	for (var p in _payload)
 		body.push(encodeURIComponent(p) +
 							"=" +
-							encodeURIComponent(payload[p]));
+							encodeURIComponent(_payload[p]));
 
 
 	loading.style.display = 'block';
@@ -28,9 +26,15 @@ export async function submit(r) {
 			'Content-Type': 'application/x-www-form-urlencoded'
 		},
 		body: body.join("&"),
-	});
+	}).then(async r => {
+		if (!r.ok) {
+			const msg = await r.text();
+			infopre.innerText = `
+${r.status} - ${r.statusText}
 
-	inputs.infoerror(response);
+${msg}`;
+		}
+		});
 
 	loading.style.display = '';
 };
@@ -39,5 +43,16 @@ export function setup({header, payload}) {
 	const headerel = document.querySelector('header');
 	headerel.innerText = header;
 
-	payload = payload;
+	_payload = payload;
+};
+
+export async function info(response) {
+	const msg = await response.text();
+
+	if (!response.ok) {
+		infopre.innerText = `
+${response.status} - ${response.statusText}
+
+${msg}`;
+	}
 };

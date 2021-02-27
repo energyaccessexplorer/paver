@@ -83,28 +83,24 @@ export async function url({label = "<unset>", info = "", before, after, payload}
 		  method: "HEAD"
 		}).catch(err => {
 		  infopre.innerText = err + "\n(probably a CORS error, check the console log in the developer tools)";
+		}).then(async r => {
+			if (!r) return;
+
+			if (r.ok) {
+				payload[label] = this.value;
+				if (typeof after === 'function') after(input);
+			}
+			else {
+				const msg = await r.text();
+				infopre.innerText = `
+${r.status} - ${r.statusText}
+
+${msg}`;
+}
 		});
-
-		infoerror(response);
-
-		if (response.ok) {
-		  payload[label] = this.value;
-			if (typeof after === 'function') after(input);
-		}
 	});
 
 	instructions.innerText = "Give a URL go to get the file";
 
 	infopre.innerText = info;
-};
-
-export async function infoerror(response) {
-	const msg = await response.text();
-
-	if (!response.ok) {
-		infopre.innerText = `
-${response.status} - ${response.statusText}
-
-${msg}`;
-	}
 };

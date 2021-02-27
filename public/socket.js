@@ -1,4 +1,4 @@
-export function socketlisten(fn) {
+export function listen(fn) {
 	const c = new WebSocket(`ws://${location.host}/socket`)
 
 	c.addEventListener("open", _ => console.info("connected!"));

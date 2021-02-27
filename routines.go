@@ -5,19 +5,20 @@ import (
 	"net/http"
 )
 
-func admin_boundaries(in filename, idattr string) (bool, error) {
+func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool, error) {
 	ids, err := raster_ids(in, idattr)
 	if err != nil {
 		return false, err
 	}
-	println("ids_raster:", ids)
+	socketwrite(fmt.Sprintf("%s <- raster ids", ids), r)
 
 	stripped, err := vectors_strip(in, []string{idattr})
 	if err != nil {
 		return false, err
 	}
+	socketwrite(fmt.Sprintf("%s <- stripped", stripped), r)
 
-	println(info(stripped))
+	socketwrite(fmt.Sprintf("dataset info:\n%s", info(stripped)), r)
 
 	return true, nil
 }
