@@ -59,7 +59,10 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- *proximity", prox), r)
 
-	cleanup_files(zeros, stripped, rstr)
+	socketwrite("clean up", r)
+	cleanup_files(in, ref, zeros, stripped, rstr, refprj)
+
+	socketwrite("done!", r)
 
 	return true, nil
 }
