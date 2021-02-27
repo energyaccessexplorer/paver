@@ -62,6 +62,15 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	socketwrite("clean up", r)
 	cleanup_files(in, ref, zeros, stripped, rstr, refprj)
 
+	if run_server {
+		keeps := []filename{prox, clipped}
+
+		for _, f := range keeps {
+			socketwrite(fmt.Sprintf("%s -> S3", f), r)
+			s3put(f, true)
+		}
+	}
+
 	socketwrite("done!", r)
 
 	return true, nil

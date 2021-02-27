@@ -35,14 +35,13 @@ func s3sign(strs ...string) string {
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
 }
 
-func s3put(fname filename) bool {
+func s3put(fname filename, rm bool) bool {
 	target := fname
 
 	file, err := os.Open(fname)
 	if err != nil {
 		panic(err.Error())
 	}
-	defer file.Close()
 
 	chksum := md5.New()
 	if _, err := io.Copy(chksum, file); err != nil {
@@ -86,6 +85,12 @@ func s3put(fname filename) bool {
 
 	fmt.Println(r.Status, string(c))
 	fmt.Println(endpoint)
+
+	file.Close()
+
+	if rm {
+		cleanup_files(fname)
+	}
 
 	return true
 }
