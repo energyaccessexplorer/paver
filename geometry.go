@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -188,10 +190,18 @@ func csv(in filename, attrs []string) (filename, error) {
 
 		payload = append(payload, strings.Join(line, ","))
 	}
-
-	name, _ := generate_file(strings.Join(payload, "\n"))
-
 	defer src.ReleaseResultSet(l)
 
-	return name, nil
+	fname := _filename()
+
+	file, _ := os.Create(fname)
+	defer file.Close()
+
+	_, err := io.WriteString(file, strings.Join(payload, "\n"))
+	if err != nil {
+		return "", err
+	}
+	file.Sync()
+
+	return fname, nil
 }

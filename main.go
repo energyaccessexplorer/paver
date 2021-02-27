@@ -2,12 +2,17 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"github.com/satori/go.uuid"
+	"os"
 )
 
 var (
 	run_server bool
 	run_cli    bool
 )
+
+type filename = string
 
 func main() {
 	parse_flags()
@@ -46,4 +51,18 @@ func parse_flags() {
 	flag.Var(&roles, "role", "Roles permitted in the JWT claims")
 
 	flag.Parse()
+}
+
+func _filename() filename {
+	return uuid.NewV4().String()
+}
+
+func trash(files ...filename) {
+	for _, f := range files {
+		if err := os.Remove(f); err == nil {
+			fmt.Println("rm", f)
+		} else {
+			fmt.Println(err)
+		}
+	}
 }

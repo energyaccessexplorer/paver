@@ -6,7 +6,7 @@ import (
 )
 
 func ids_raster(in filename, gid string) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	//  -a Identifies an attribute field on the features to be used for a burn-in
 	//     value. The value will be burned into all output bands.
@@ -67,7 +67,7 @@ func geometry_raster(in filename, dst filename) (filename, error) {
 }
 
 func proximity_raster(in filename) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	opts := []string{
 		"DISTUNITS=PIXEL",
@@ -104,7 +104,7 @@ func proximity_raster(in filename) (filename, error) {
 }
 
 func zeros_raster(in filename) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	opts := []string{
 		"-burn", "0",

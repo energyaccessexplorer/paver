@@ -36,8 +36,6 @@ func s3sign(strs ...string) string {
 }
 
 func s3put(fname filename, rm bool) bool {
-	target := fname
-
 	file, err := os.Open(fname)
 	if err != nil {
 		panic(err.Error())
@@ -54,7 +52,7 @@ func s3put(fname filename, rm bool) bool {
 
 	timestamp := s3timestamp()
 
-	destination := strings.Join([]string{S3BUCKET, S3DIRECTORY, target}, "/")
+	destination := strings.Join([]string{S3BUCKET, S3DIRECTORY, fname}, "/")
 
 	signature := s3sign(
 		"PUT",
@@ -89,7 +87,7 @@ func s3put(fname filename, rm bool) bool {
 	file.Close()
 
 	if rm {
-		cleanup_files(fname)
+		trash(fname)
 	}
 
 	return true

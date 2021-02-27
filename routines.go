@@ -60,7 +60,7 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	socketwrite(fmt.Sprintf("%s <- *proximity", prox), r)
 
 	socketwrite("clean up", r)
-	cleanup_files(in, ref, zeros, stripped, rstr, refprj)
+	trash(in, ref, zeros, stripped, rstr, refprj)
 
 	if run_server {
 		keeps := []filename{prox, clipped}
@@ -101,7 +101,7 @@ func vectors_routine(in filename, ref filename, attrs []string) (bool, error) {
 	}
 	println("proximity_raster:", prox)
 
-	cleanup_files(zeros, rstr)
+	trash(zeros, rstr)
 
 	return true, nil
 }

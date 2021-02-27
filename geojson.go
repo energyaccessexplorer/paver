@@ -7,7 +7,7 @@ import (
 )
 
 func strip(in filename, attrs []string) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	opts := []string{
 		"-f", "GeoJSON",
@@ -30,7 +30,7 @@ func strip(in filename, attrs []string) (filename, error) {
 }
 
 func reproject(in filename) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	opts := []string{
 		"-t_srs", "EPSG:3857",

@@ -130,7 +130,7 @@ func uri_test(url string) (status int, success bool) {
 }
 
 func snatch(location string) (fname string, err error) {
-	fname = rand_filename()
+	fname = _filename()
 
 	for _, x := range []string{"geojson", "shp", "tiff"} {
 		if strings.HasSuffix(location, "."+x) {

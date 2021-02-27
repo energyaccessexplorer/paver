@@ -23,7 +23,7 @@ func fields(in filename) []string {
 }
 
 func clip(in filename, container filename) (filename, error) {
-	out := rand_filename()
+	out := _filename()
 
 	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
 	tar := gdal.OpenDataSource(container, 0).LayerByIndex(0)
