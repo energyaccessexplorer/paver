@@ -29,7 +29,13 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- stripped", stripped), r)
 
-	zeros, err := zeros_raster(ref)
+	refprj, err := reproject(ref)
+	if err != nil {
+		return false, err
+	}
+	socketwrite(fmt.Sprintf("%s <- reprojected reference", refprj), r)
+
+	zeros, err := zeros_raster(refprj)
 	if err != nil {
 		return false, err
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/energyaccessexplorer/gdal"
+	"os"
 	"strings"
 )
 
@@ -29,7 +30,7 @@ func strip(in filename, attrs []string) (filename, error) {
 }
 
 func reproject(in filename) (filename, error) {
-	out := rand_filename() + ".geojson"
+	out := rand_filename()
 
 	opts := []string{
 		"-t_srs", "EPSG:3857",
@@ -42,12 +43,14 @@ func reproject(in filename) (filename, error) {
 	}
 	defer src.Close()
 
-	dst, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+	dst, err := gdal.VectorTranslate(out+".geojson", []gdal.Dataset{src}, opts)
 	if err != nil {
 		panic(err)
 		return "", err
 	}
-	defer dst.Close()
+	dst.Close()
+
+	os.Rename(out+".geojson", out)
 
 	return out, nil
 }
