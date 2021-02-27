@@ -13,34 +13,10 @@ var (
 )
 
 func server_endpoints(mux *http.ServeMux) {
-	mux.HandleFunc("/files", _files)
 	mux.HandleFunc("/socket", _socket)
 	mux.HandleFunc("/routines", _routines)
 
 	mux.Handle("/", http.FileServer(http.Dir("public/")))
-}
-
-func _files(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "POST":
-		f := formdata{
-			"file":     nil,
-			"location": nil,
-		}
-
-		form_parse(&f, r)
-
-		if len(f["location"]) > 0 {
-			if result, err := snatch(string(f["location"])); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			} else {
-				io.WriteString(w, result)
-			}
-		}
-
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {

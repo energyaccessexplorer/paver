@@ -75,33 +75,3 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, attrs []
 
 	return true, nil
 }
-
-func vectors_routine(in filename, ref filename, attrs []string) (bool, error) {
-	stripped, err := vectors_strip(in, attrs)
-	if err != nil {
-		return false, err
-	}
-	println("stripped:", stripped)
-
-	zeros, err := raster_zeros(ref)
-	if err != nil {
-		return false, err
-	}
-	println("zeros:", zeros)
-
-	rstr, err := raster_geometry(in, zeros)
-	if err != nil {
-		return false, err
-	}
-	println("rasterised:", rstr)
-
-	prox, err := raster_proximity(rstr)
-	if err != nil {
-		return false, err
-	}
-	println("proximity_raster:", prox)
-
-	trash(zeros, rstr)
-
-	return true, nil
-}
