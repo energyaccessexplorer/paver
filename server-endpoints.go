@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"nhooyr.io/websocket"
+	"strings"
 	"time"
 )
 
@@ -12,11 +13,10 @@ var (
 	socket *websocket.Conn
 )
 
-func server_endpoints(mux *http.ServeMux) {
-	mux.HandleFunc("/socket", _socket)
-	mux.HandleFunc("/routines", _routines)
+type server_routine func(*http.Request) (bool, error)
 
-	mux.Handle("/", http.FileServer(http.Dir("public/")))
+var server_routines = map[string]server_routine{
+	"clip-proximity":   server_clip_proximity,
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {
@@ -67,4 +67,45 @@ func _socket(w http.ResponseWriter, r *http.Request) {
 
 		count += 1
 	}
+}
+
+func server_endpoints(mux *http.ServeMux) {
+	mux.HandleFunc("/socket", _socket)
+	mux.HandleFunc("/routines", _routines)
+
+	mux.Handle("/", http.FileServer(http.Dir("public/")))
+}
+
+func server_clip_proximity(r *http.Request) (bool, error) {
+	f := formdata{
+		"dataseturl":   nil,
+		"referenceurl": nil,
+		"attrs":        nil,
+	}
+
+	err := form_parse(&f, r)
+	if err != nil {
+		return false, err
+	}
+
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return false, err
+	}
+
+	referencefile, err := snatch(string(f["referenceurl"]))
+	if err != nil {
+		return false, err
+	}
+
+	if ok, err := routine_clip_proximity(
+		r,
+		inputfile,
+		referencefile,
+		strings.Split(string(f["attrs"]), ","),
+	); !ok {
+		return false, err
+	}
+
+	return true, nil
 }
