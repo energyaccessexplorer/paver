@@ -6,7 +6,7 @@ import (
 )
 
 func admin_boundaries(in filename, idattr string) (bool, error) {
-	ids, err := ids_raster(in, idattr)
+	ids, err := raster_ids(in, idattr)
 	if err != nil {
 		return false, err
 	}
@@ -35,7 +35,7 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- reprojected reference", refprj), r)
 
-	zeros, err := zeros_raster(refprj)
+	zeros, err := raster_zeros(refprj)
 	if err != nil {
 		return false, err
 	}
@@ -47,13 +47,13 @@ func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs [
 	}
 	socketwrite(fmt.Sprintf("%s <- *clipped", clipped), r)
 
-	rstr, err := geometry_raster(clipped, zeros)
+	rstr, err := raster_geometry(clipped, zeros)
 	if err != nil {
 		return false, err
 	}
 	socketwrite(fmt.Sprintf("%s <- rasterised <- zeros", rstr), r)
 
-	prox, err := proximity_raster(rstr)
+	prox, err := raster_proximity(rstr)
 	if err != nil {
 		return false, err
 	}
@@ -83,19 +83,19 @@ func vectors_routine(in filename, ref filename, attrs []string) (bool, error) {
 	}
 	println("stripped:", stripped)
 
-	zeros, err := zeros_raster(ref)
+	zeros, err := raster_zeros(ref)
 	if err != nil {
 		return false, err
 	}
 	println("zeros:", zeros)
 
-	rstr, err := geometry_raster(in, zeros)
+	rstr, err := raster_geometry(in, zeros)
 	if err != nil {
 		return false, err
 	}
 	println("rasterised:", rstr)
 
-	prox, err := proximity_raster(rstr)
+	prox, err := raster_proximity(rstr)
 	if err != nil {
 		return false, err
 	}

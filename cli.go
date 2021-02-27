@@ -52,7 +52,7 @@ func cli() {
 
 	case "zeros":
 		{
-			out, _ := zeros_raster(inputfile)
+			out, _ := raster_zeros(inputfile)
 
 			println("zeroes output:", out)
 		}
@@ -74,7 +74,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, _ := geometry_raster(inputfile, targetfile)
+			out, _ := raster_geometry(inputfile, targetfile)
 
 			println("rasterise output:", out)
 		}
@@ -85,9 +85,9 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			r, _ := geometry_raster(inputfile, targetfile)
+			r, _ := raster_geometry(inputfile, targetfile)
 
-			out, _ := proximity_raster(r)
+			out, _ := raster_proximity(r)
 
 			println("proximity output:", out)
 		}
@@ -99,7 +99,7 @@ func cli() {
 				idattr = default_idattr
 			}
 
-			out, _ := ids_raster(inputfile, idattr)
+			out, _ := raster_ids(inputfile, idattr)
 
 			println("ids_raster output:", out)
 		}

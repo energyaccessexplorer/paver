@@ -5,7 +5,7 @@ import (
 	"github.com/energyaccessexplorer/gdal"
 )
 
-func ids_raster(in filename, gid string) (filename, error) {
+func raster_ids(in filename, gid string) (filename, error) {
 	out := _filename()
 
 	//  -a Identifies an attribute field on the features to be used for a burn-in
@@ -38,7 +38,7 @@ func ids_raster(in filename, gid string) (filename, error) {
 	return out, err
 }
 
-func geometry_raster(in filename, dst filename) (filename, error) {
+func raster_geometry(in filename, dst filename) (filename, error) {
 	opts := []string{
 		"-l", gdal.OpenDataSource(in, 0).LayerByIndex(0).Name(),
 		"-burn", "1",
@@ -66,7 +66,7 @@ func geometry_raster(in filename, dst filename) (filename, error) {
 	return dst, err
 }
 
-func proximity_raster(in filename) (filename, error) {
+func raster_proximity(in filename) (filename, error) {
 	out := _filename()
 
 	opts := []string{
@@ -103,7 +103,7 @@ func proximity_raster(in filename) (filename, error) {
 	return out, err
 }
 
-func zeros_raster(in filename) (filename, error) {
+func raster_zeros(in filename) (filename, error) {
 	out := _filename()
 
 	opts := []string{
