@@ -129,15 +129,6 @@ func uri_test(url string) (status int, success bool) {
 	return
 }
 
-func file_create(filename string) (f *os.File, filepath string, err error) {
-	filepath = tmpdir + "/" + filename
-	if f, err = os.Create(filepath); err != nil {
-		return nil, "", err
-	}
-
-	return
-}
-
 func snatch(location string) (fname string, err error) {
 	fname = rand_filename()
 
@@ -159,7 +150,10 @@ func snatch(location string) (fname string, err error) {
 	}
 	defer resp.Body.Close()
 
-	file, fname, err := file_create(filename)
+	file, err := os.Create(fname)
+	if err != nil {
+		return "", err
+	}
 	defer file.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
