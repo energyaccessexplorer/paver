@@ -33,7 +33,7 @@ func server_vectors_clip_proximity(r *http.Request) (bool, error) {
 		return false, err
 	}
 
-	ok, err := vectors_clipped_routine(
+	ok, err := routine_clip_proximity(
 		r,
 		inputfile,
 		referencefile,

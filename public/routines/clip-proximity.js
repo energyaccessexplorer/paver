@@ -1,8 +1,8 @@
 import '/lib/selectlist.js';
 
-import * as inputs from '/inputs.js';
+import * as inputs from '../inputs.js';
 
-import {socketlisten} from '/socket.js';
+import {socketlisten} from '../socket.js';
 
 const header = document.querySelector('header');
 

@@ -150,7 +150,7 @@ func cli() {
 			vectors_routine(inputfile, referencefile, []string{idattr})
 		}
 
-	case "vectors_clipped_routine":
+	case "routine_clip_proximity":
 		{
 			if idattr == "" {
 				println("No -g (idattr) given. Will use 'OBJECTID'")
@@ -161,7 +161,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			vectors_clipped_routine(nil, inputfile, referencefile, []string{idattr})
+			routine_clip_proximity(nil, inputfile, referencefile, []string{idattr})
 		}
 
 	default:

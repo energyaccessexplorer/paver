@@ -22,7 +22,7 @@ func admin_boundaries(in filename, idattr string) (bool, error) {
 	return true, nil
 }
 
-func vectors_clipped_routine(r *http.Request, in filename, ref filename, attrs []string) (bool, error) {
+func routine_clip_proximity(r *http.Request, in filename, ref filename, attrs []string) (bool, error) {
 	stripped, err := vectors_strip(in, attrs)
 	if err != nil {
 		return false, err
