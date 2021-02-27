@@ -42,7 +42,7 @@ func cli() {
 	switch command {
 	case "bounds":
 		{
-			fmt.Println("bounds:", bounds(inputfile).ToJSON())
+			fmt.Println("bounds:", info_bounds(inputfile).ToJSON())
 		}
 
 	case "info":

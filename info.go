@@ -13,14 +13,14 @@ type dataset_info struct {
 	Bounds       [4]float64 `json:"bounds"`
 }
 
-func featurecount(in filename) int {
+func info_featurecount(in filename) int {
 	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
 	cs, _ := src.FeatureCount(true)
 
 	return cs
 }
 
-func bounds(in filename) gdal.Geometry {
+func info_bounds(in filename) gdal.Geometry {
 	t := gdal.CreateSpatialReference("")
 	t.FromEPSG(default_epsg)
 
@@ -70,11 +70,11 @@ func bounds(in filename) gdal.Geometry {
 }
 
 func info(in filename) string {
-	e := bounds(in).Envelope()
+	e := info_bounds(in).Envelope()
 
 	i := dataset_info{
 		fields(in),
-		featurecount(in),
+		info_featurecount(in),
 		[4]float64{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
 	}
 
