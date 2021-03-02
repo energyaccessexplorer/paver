@@ -44,6 +44,8 @@ func serve() {
 		panic(err)
 	}
 
+	os.Chmod("/tmp/paver-server.sock", 0777)
+
 	fmt.Println("Listening on socket:", "/tmp/paver-server.sock")
 	panic(http.Serve(l, mux))
 }
