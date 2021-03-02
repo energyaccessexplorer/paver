@@ -1,4 +1,4 @@
-import '/lib/selectlist.js';
+import '../lib/selectlist.js';
 
 import * as inputs from '../inputs.js';
 

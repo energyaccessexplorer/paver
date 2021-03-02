@@ -6,13 +6,13 @@ build:
 	go fmt
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
-	go build -ldflags '-s \
+	go build -ldflags "-s \
 		-X main.S3KEY=${S3KEY} \
 		-X main.S3SECRET=${S3SECRET} \
 		-X main.S3PROVIDER=${S3PROVIDER} \
 		-X main.S3BUCKET=${S3BUCKET} \
 		-X main.S3DIRECTORY=${S3DIRECTORY} \
-		-X main.S3ACL=${S3ACL}'
+		-X main.S3ACL=${S3ACL}"
 
 clean:
 	-rm -f paver
