@@ -1,5 +1,9 @@
+import config from './config.js';
+
 export function listen(fn) {
-	const c = new WebSocket(`ws://${location.host}/socket`)
+	const p = location.protocol === "https" ? "wss" : "ws";
+
+	const c = new WebSocket(`${p}://${location.host}${config.base}/socket`);
 
 	c.addEventListener("open", _ => console.info("connected!"));
 

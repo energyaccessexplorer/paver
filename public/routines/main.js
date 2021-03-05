@@ -1,3 +1,5 @@
+import config from '../config.js';
+
 import * as socket from '../socket.js';
 
 import * as inputs from '../inputs.js';
@@ -20,7 +22,7 @@ export async function submit(r) {
 
 	socket.listen(m => infopre.innerText += "\n" + m);
 
-	const response = await fetch(`/routines?routine=${r}`, {
+	const response = await fetch(`${config.base}/routines?routine=${r}`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded'
