@@ -4,6 +4,11 @@ body {
   font-family: sans-serif;
 }
 
+a, a:active {
+  text-decoration: none;
+  color: #6992e4;
+}
+
 fieldset {
   border: none;
 }
