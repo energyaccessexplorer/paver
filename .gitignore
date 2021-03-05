@@ -5,3 +5,6 @@
 /gdal
 /.env
 /go.sum
+/public/lib/
+/public/data/
+/public/config.js

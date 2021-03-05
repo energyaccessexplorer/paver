@@ -10,11 +10,12 @@ const infopre = document.querySelector('pre');
 let _payload;
 
 export async function submit(r) {
-	var body = [];
-	for (var p in _payload)
-		body.push(encodeURIComponent(p) +
-							"=" +
-							encodeURIComponent(_payload[p]));
+	const body = [];
+	for (const p in _payload)
+		body.push(
+			encodeURIComponent(p) +
+				"=" +
+				encodeURIComponent(_payload[p]));
 
 
 	loading.style.display = 'block';
@@ -36,7 +37,7 @@ ${r.status} - ${r.statusText}
 
 ${msg}`;
 		}
-		});
+	});
 
 	loading.style.display = '';
 };
