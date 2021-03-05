@@ -1,7 +1,7 @@
 import config from './config.js';
 
 export function listen(fn) {
-	const p = location.protocol === "https" ? "wss" : "ws";
+	const p = location.protocol === "https:" ? "wss" : "ws";
 
 	const c = new WebSocket(`${p}://${location.host}${config.base}/socket`);
 
