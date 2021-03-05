@@ -20,6 +20,20 @@ func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool
 
 	socketwrite(fmt.Sprintf("dataset info:\n%s", info(stripped)), r)
 
+	socketwrite("clean up", r)
+	// trash()
+
+	if run_server {
+		keeps := []filename{ids, stripped}
+
+		for _, f := range keeps {
+			socketwrite(fmt.Sprintf("%s -> S3", f), r)
+			s3put(f, true)
+		}
+	}
+
+	socketwrite("done!", r)
+
 	return true, nil
 }
 
