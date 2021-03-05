@@ -6,13 +6,19 @@ import (
 )
 
 func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool, error) {
-	ids, err := raster_ids(in, idattr)
+	rprj, err := vectors_reproject(in)
+	if err != nil {
+		return false, err
+	}
+	socketwrite(fmt.Sprintf("%s <- reprojected", rprj), r)
+
+	ids, err := raster_ids(rprj, idattr)
 	if err != nil {
 		return false, err
 	}
 	socketwrite(fmt.Sprintf("%s <- raster ids", ids), r)
 
-	stripped, err := vectors_strip(in, []string{idattr})
+	stripped, err := vectors_strip(rprj, []string{idattr})
 	if err != nil {
 		return false, err
 	}
@@ -21,7 +27,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool
 	socketwrite(fmt.Sprintf("dataset info:\n%s", info(stripped)), r)
 
 	socketwrite("clean up", r)
-	// trash()
+	trash(rprj)
 
 	if run_server {
 		keeps := []filename{ids, stripped}
