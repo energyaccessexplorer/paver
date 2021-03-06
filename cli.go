@@ -16,13 +16,6 @@ var (
 	targetfile    string
 )
 
-var default_epsg = 4326
-var default_idattr = "OBJECTID"
-
-// -ot For the output bands to be of the indicated data type. Defaults to
-//     Float64
-//
-
 type arrayFlag []string
 
 func (i *arrayFlag) String() string {
@@ -94,11 +87,6 @@ func cli() {
 
 	case "idsraster":
 		{
-			if idattr == "" {
-				println("No -g (idattr) given. Will use 'OBJECTID'")
-				idattr = default_idattr
-			}
-
 			out, _ := raster_ids(inputfile, idattr)
 
 			println("ids_raster output:", out)
@@ -128,21 +116,11 @@ func cli() {
 
 	case "admin_boundaries":
 		{
-			if idattr == "" {
-				println("No -g (idattr) given. Will use 'OBJECTID'")
-				idattr = default_idattr
-			}
-
 			routine_admin_boundaries(nil, inputfile, idattr)
 		}
 
 	case "routine_clip_proximity":
 		{
-			if idattr == "" {
-				println("No -g (idattr) given. Will use 'OBJECTID'")
-				idattr = default_idattr
-			}
-
 			if referencefile == "" {
 				panic("No -r (referencefile) given:")
 			}

@@ -38,7 +38,7 @@ func parse_flags() {
 	flag.StringVar(&targetfile, "t", "", "Target file to use as reference for clipping/cropping")
 	flag.StringVar(&referencefile, "r", "", "File to be used as reference")
 
-	flag.StringVar(&idattr, "g", default_idattr, "blah blah")
+	flag.StringVar(&idattr, "g", "OBJECTID", "blah blah")
 
 	flag.Var(&selectattrs, "s", "Attributes to extract from the features")
 

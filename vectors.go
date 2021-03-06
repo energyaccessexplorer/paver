@@ -72,7 +72,7 @@ func vectors_clip(in filename, container filename) (filename, error) {
 	ds, _ := drv.Create(out, []string{})
 
 	s := gdal.CreateSpatialReference("")
-	s.FromEPSG(default_epsg)
+	s.FromEPSG(4326)
 
 	result := ds.CreateLayer("Layer0", s, src.Type(), []string{})
 

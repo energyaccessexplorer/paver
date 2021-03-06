@@ -22,7 +22,7 @@ func info_featurecount(in filename) int {
 
 func info_bounds(in filename) gdal.Geometry {
 	t := gdal.CreateSpatialReference("")
-	t.FromEPSG(default_epsg)
+	t.FromEPSG(4326)
 
 	src := gdal.OpenDataSource(in, 0)
 
