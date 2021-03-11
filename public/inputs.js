@@ -19,6 +19,8 @@ export async function geographies({before, after, payload}) {
 		}, {})
 	);
 
+	sl.input.setAttribute('required', true);
+	sl.input.setAttribute('placeholder', "Select a geography");
 	sl.input.addEventListener('change', function(e) {
 		const geo = geos.find(x => x['cca3'] === this.value);
 
@@ -50,6 +52,8 @@ export async function datasetid({before, after, payload}) {
 		}, {})
 	);
 
+	sl.input.setAttribute('required', true);
+	sl.input.setAttribute('placeholder', "Select a dataset");
 	sl.input.addEventListener('change', function(e) {
 		payload['datasetid'] = this.value;
 		if (typeof after === 'function') after(this);
@@ -70,6 +74,8 @@ export function url({label = "<unset>", before, after, payload}) {
 	input.setAttribute('type', 'url');
 	input.setAttribute('name', 'location');
 	input.setAttribute('autocomplete', 'off');
+	input.setAttribute('placeholder', "URL for target dataset");
+	input.setAttribute('pattern', 'http(.*).geojson');
 	input.addEventListener('change', async function(e) {
 		payload[label] = this.value;
 
