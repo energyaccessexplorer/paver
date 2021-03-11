@@ -4,7 +4,9 @@ const storage = "https://wri-public-data.s3.amazonaws.com/EnergyAccess/";
 const form = document.querySelector('#not-a-form-form');
 const infopre = document.querySelector('pre');
 
-export async function geographies({after, payload}) {
+export async function geographies({before, after, payload}) {
+	if (typeof before === 'function') before();
+
 	const path = "/geographies?select=id,name,cca3,boundary(id,endpoint)&boundary_file=not.is.null";
 	const geos = await fetch(origin + path)
 				.then(r => r.json());
@@ -17,8 +19,6 @@ export async function geographies({after, payload}) {
 		}, {})
 	);
 
-	form.append(sl.input);
-
 	sl.input.addEventListener('change', function(e) {
 		const geo = geos.find(x => x['cca3'] === this.value);
 
@@ -28,13 +28,16 @@ export async function geographies({after, payload}) {
 		if (typeof after === 'function') after(this);
 	});
 
-	sl.input.focus();
+	form.append(sl.input);
 
+	sl.input.focus();
 
 	infopre.innerText = "If a geography is not on the list, it probably means it does not have a boundary_file set";
 };
 
 export async function datasetid({before, after, payload}) {
+	if (typeof before === 'function') before();
+
 	const path = `/datasets?select=id,name,category_name&geography_id=eq.${payload['geographyid']}`;
 	const datas = await fetch(origin + path)
 				.then(r => r.json());
@@ -47,35 +50,34 @@ export async function datasetid({before, after, payload}) {
 		}, {})
 	);
 
-	if (typeof before === 'function') before();
-	form.prepend(sl.input);
-
 	sl.input.addEventListener('change', function(e) {
 		payload['datasetid'] = this.value;
 		if (typeof after === 'function') after(this);
 	});
 
-	sl.input.focus();
+	form.prepend(sl.input);
 
+	sl.input.focus();
 
 	infopre.innerText = "This will one day automatically relate the generated files with this dataset...";
 };
 
 export function url({label = "<unset>", before, after, payload}) {
+	if (typeof before === 'function') before();
+
 	const input = document.createElement('input');
-	input.setAttribute('required', '');
+	input.setAttribute('required', true);
 	input.setAttribute('type', 'url');
 	input.setAttribute('name', 'location');
 	input.setAttribute('autocomplete', 'off');
-
-	input.value = storage;
-
-	if (typeof before === 'function') before();
-	form.prepend(input);
-
-	input.focus();
-
 	input.addEventListener('change', async function(e) {
+		payload[label] = this.value;
+
+
+		if (typeof after === 'function') after(input);
+
+		return;
+
 		const response = await fetch(this.value, {
 		  method: "HEAD"
 		}).catch(err => {
@@ -96,18 +98,22 @@ ${msg}`;
 }
 		});
 	});
+	input.value = storage;
 
+	form.prepend(input);
+
+	input.focus();
 
 	infopre.innerText = "URL to *.geojson file. The original file will not be modified.";
 };
 
 export function attr({before, after, payload}) {
-	const input = document.createElement('input');
-
 	if (typeof before === 'function') before();
 
-	input.setAttribute('required', 'true');
-	input.setAttribute('placeholder', 'Dataset relevant fields');
+	const input = document.createElement('input');
+
+	input.setAttribute('required', true);
+	input.setAttribute('placeholder', "Dataset relevant fields");
 	input.addEventListener('change', function(e) {
 		payload['attrs'] = this.value.split(',').map(x => x.trim()).join(',');
 		if (typeof after === 'function') after(this);
