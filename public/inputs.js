@@ -2,7 +2,6 @@ const origin = "https://api.energyaccessexplorer.org";
 const storage = "https://wri-public-data.s3.amazonaws.com/EnergyAccess/";
 
 const form = document.querySelector('#not-a-form-form');
-const instructions = document.querySelector('#instructions');
 const infopre = document.querySelector('pre');
 
 export async function geographies({after, payload}) {
@@ -31,7 +30,6 @@ export async function geographies({after, payload}) {
 
 	sl.input.focus();
 
-	instructions.innerText = "Pick a geography";
 
 	infopre.innerText = "If a geography is not on the list, it probably means it does not have a boundary_file set";
 };
@@ -59,12 +57,11 @@ export async function datasetid({before, after, payload}) {
 
 	sl.input.focus();
 
-	instructions.innerText = "Pick a dataset";
 
 	infopre.innerText = "This will one day automatically relate the generated files with this dataset...";
 };
 
-export async function url({label = "<unset>", info = "", before, after, payload}) {
+export function url({label = "<unset>", before, after, payload}) {
 	const input = document.createElement('input');
 	input.setAttribute('required', '');
 	input.setAttribute('type', 'url');
@@ -100,9 +97,8 @@ ${msg}`;
 		});
 	});
 
-	instructions.innerText = "Give a URL go to get the file";
 
-	infopre.innerText = info;
+	infopre.innerText = "URL to *.geojson file. The original file will not be modified.";
 };
 
 export function attr({before, after, payload}) {
