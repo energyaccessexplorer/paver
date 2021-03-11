@@ -77,8 +77,12 @@ export function url({label = "<unset>", before, after, payload}) {
 	input.setAttribute('placeholder', "URL for target dataset");
 	input.setAttribute('pattern', 'http(.*).geojson');
 	input.addEventListener('change', async function(e) {
-		payload[label] = this.value;
+		if (!input.checkValidity()) {
+			input.reportValidity();
+			return;
+		}
 
+		payload[label] = this.value;
 
 		if (typeof after === 'function') after(input);
 
@@ -120,8 +124,15 @@ export function attr({before, after, payload}) {
 
 	input.setAttribute('required', true);
 	input.setAttribute('placeholder', "Dataset relevant fields");
+	input.setAttribute('pattern', "^[a-zA-Z0-9]+(,[a-zA-Z0-9]+)*$")
 	input.addEventListener('change', function(e) {
+		if (!input.checkValidity()) {
+			input.reportValidity();
+			return;
+		}
+
 		payload['attrs'] = this.value.split(',').map(x => x.trim()).join(',');
+
 		if (typeof after === 'function') after(this);
 	});
 
@@ -129,5 +140,11 @@ export function attr({before, after, payload}) {
 
 	input.focus();
 
-	infopre.innerText = "It should be a comma-separated list. The other fields will be discarded.";
+	infopre.innerText = `
+It should be a comma-separated list - no spaces. The other fields will be discarded.
+
+two <= correct
+uno,two,4 <= correct
+uno, two,4,, <= triply incorrect
+`;
 };
