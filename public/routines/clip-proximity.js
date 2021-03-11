@@ -11,7 +11,7 @@ const payload = {
 	datasetid: null,
 	dataseturl: null,
 	referenceurl: null,
-	attrs: null,
+	fields: null,
 };
 
 main.setup({ header, payload });
@@ -39,8 +39,8 @@ function datasetinput(oldinput) {
 };
 
 function attrsinput(oldinput) {
-	return inputs.attr({
-		label: 'attrs',
+	return inputs.fields({
+		label: 'fields',
 		before: _ => oldinput.remove(),
 		after: _ => main.submit('clip-proximity'),
 		payload

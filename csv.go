@@ -11,23 +11,23 @@ import (
 	"time"
 )
 
-func csv(in filename, attrs []string) (filename, error) {
+func csv(in filename, fields []string) (filename, error) {
 	src := gdal.OpenDataSource(in, 0)
 	layer := src.LayerByIndex(0).Name()
 
-	cols := strings.Join(attrs, ",")
+	cols := strings.Join(fields, ",")
 	sql := fmt.Sprintf("SELECT %s FROM \"%s\"", cols, layer)
 
 	fis := info_fields(in)
 
-	for _, a := range attrs {
+	for _, a := range fields {
 		for _, fi := range fis {
 			if fi == a {
 				goto found
 			}
 		}
 
-		return "", errors.New(fmt.Sprintf("Could not find attr %s in %s\n", a, fis))
+		return "", errors.New(fmt.Sprintf("Could not find field %s in %s\n", a, fis))
 
 	found:
 		continue
@@ -39,14 +39,14 @@ func csv(in filename, attrs []string) (filename, error) {
 	var f0 gdal.Feature
 	f0 = l.Feature(0)
 
-	indexes := make([]int, len(attrs))
-	for j, str := range attrs {
+	indexes := make([]int, len(fields))
+	for j, str := range fields {
 		indexes[j] = f0.FieldIndex(str)
 	}
 
 	var payload []string
 
-	payload = append(payload, strings.Join(attrs, ","))
+	payload = append(payload, strings.Join(fields, ","))
 
 	var f *gdal.Feature
 	for {

@@ -9,7 +9,7 @@ const header = "Adminitrative Boundaries";
 const payload = {
 	geographyid: null,
 	dataseturl: null,
-	attr: 'OBJECTID'
+	field: 'OBJECTID'
 };
 
 main.setup({ header, payload });

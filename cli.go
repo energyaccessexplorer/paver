@@ -6,9 +6,9 @@ import (
 )
 
 var (
-	idattr string
+	idfield string
 
-	selectattrs arrayFlag
+	selectfields arrayFlag
 
 	command       string
 	inputfile     string
@@ -52,11 +52,11 @@ func cli() {
 
 	case "strip":
 		{
-			if len(selectattrs) == 0 {
-				panic("No -s (select attributes) given.")
+			if len(selectfields) == 0 {
+				panic("No -s (select fields) given.")
 			}
 
-			out, _ := vectors_strip(inputfile, selectattrs)
+			out, _ := vectors_strip(inputfile, selectfields)
 
 			println("strip output:", out)
 		}
@@ -87,7 +87,7 @@ func cli() {
 
 	case "idsraster":
 		{
-			out, _ := raster_ids(inputfile, idattr)
+			out, _ := raster_ids(inputfile, idfield)
 
 			println("ids_raster output:", out)
 		}
@@ -105,18 +105,18 @@ func cli() {
 
 	case "csv":
 		{
-			if len(selectattrs) == 0 {
-				panic("No -s (select attributes) given.")
+			if len(selectfields) == 0 {
+				panic("No -s (select fields) given.")
 			}
 
-			out, _ := csv(inputfile, selectattrs)
+			out, _ := csv(inputfile, selectfields)
 
 			println("cvs output:", out)
 		}
 
 	case "admin_boundaries":
 		{
-			routine_admin_boundaries(nil, inputfile, idattr)
+			routine_admin_boundaries(nil, inputfile, idfield)
 		}
 
 	case "routine_clip_proximity":
@@ -125,7 +125,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_clip_proximity(nil, inputfile, referencefile, []string{idattr})
+			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield})
 		}
 
 	default:

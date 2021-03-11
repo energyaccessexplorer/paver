@@ -80,7 +80,7 @@ func server_endpoints(mux *http.ServeMux) {
 func server_admin_boundaries(r *http.Request) (bool, error) {
 	f := formdata{
 		"dataseturl": nil,
-		"attr":       nil,
+		"field":      nil,
 	}
 
 	err := form_parse(&f, r)
@@ -92,7 +92,7 @@ func server_admin_boundaries(r *http.Request) (bool, error) {
 	if ok, err := routine_admin_boundaries(
 		r,
 		inputfile,
-		string(f["attr"]),
+		string(f["field"]),
 	); !ok {
 		return false, err
 	}
@@ -104,7 +104,7 @@ func server_clip_proximity(r *http.Request) (bool, error) {
 	f := formdata{
 		"dataseturl":   nil,
 		"referenceurl": nil,
-		"attrs":        nil,
+		"fields":       nil,
 	}
 
 	err := form_parse(&f, r)
@@ -126,7 +126,7 @@ func server_clip_proximity(r *http.Request) (bool, error) {
 		r,
 		inputfile,
 		referencefile,
-		strings.Split(string(f["attrs"]), ","),
+		strings.Split(string(f["fields"]), ","),
 	); !ok {
 		return false, err
 	}

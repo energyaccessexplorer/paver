@@ -5,20 +5,20 @@ import (
 	"net/http"
 )
 
-func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool, error) {
+func routine_admin_boundaries(r *http.Request, in filename, idfield string) (bool, error) {
 	rprj, err := vectors_reproject(in)
 	if err != nil {
 		return false, err
 	}
 	socketwrite(fmt.Sprintf("%s <- *reprojected", rprj), r)
 
-	ids, err := raster_ids(rprj, idattr)
+	ids, err := raster_ids(rprj, idfield)
 	if err != nil {
 		return false, err
 	}
 	socketwrite(fmt.Sprintf("%s <- raster ids", ids), r)
 
-	stripped, err := vectors_strip(rprj, []string{idattr})
+	stripped, err := vectors_strip(rprj, []string{idfield})
 	if err != nil {
 		return false, err
 	}
@@ -43,8 +43,8 @@ func routine_admin_boundaries(r *http.Request, in filename, idattr string) (bool
 	return true, nil
 }
 
-func routine_clip_proximity(r *http.Request, in filename, ref filename, attrs []string) (bool, error) {
-	stripped, err := vectors_strip(in, attrs)
+func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string) (bool, error) {
+	stripped, err := vectors_strip(in, fields)
 	if err != nil {
 		return false, err
 	}

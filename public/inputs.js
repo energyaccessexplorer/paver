@@ -117,7 +117,7 @@ ${msg}`;
 	infopre.innerText = "URL to *.geojson file. The original file will not be modified.";
 };
 
-export function attr({before, after, payload}) {
+export function fields({before, after, payload}) {
 	if (typeof before === 'function') before();
 
 	const input = document.createElement('input');
@@ -131,7 +131,7 @@ export function attr({before, after, payload}) {
 			return;
 		}
 
-		payload['attrs'] = this.value.split(',').map(x => x.trim()).join(',');
+		payload['fields'] = this.value.split(',').map(x => x.trim()).join(',');
 
 		if (typeof after === 'function') after(this);
 	});

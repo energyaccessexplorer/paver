@@ -8,12 +8,12 @@ import (
 	"strings"
 )
 
-func vectors_strip(in filename, attrs []string) (filename, error) {
+func vectors_strip(in filename, fields []string) (filename, error) {
 	out := _filename()
 
 	opts := []string{
 		"-f", "GeoJSON",
-		"-select", strings.Join(attrs, ","),
+		"-select", strings.Join(fields, ","),
 	}
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
