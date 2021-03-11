@@ -11,7 +11,7 @@ const payload = {
 	datasetid: null,
 	dataseturl: null,
 	referenceurl: null,
-	attrs: "name",
+	attrs: null,
 };
 
 main.setup({ header, payload });
@@ -33,6 +33,16 @@ function datasetinput(oldinput) {
 	return inputs.url({
 		label: 'dataseturl',
 		info: 'What dataset are we working with? (GEOJSON)',
+		before: _ => oldinput.remove(),
+		after: t => attrsinput(t),
+		payload
+	});
+};
+
+function attrsinput(oldinput) {
+	return inputs.attr({
+		label: 'attrs',
+		info: 'Set the attributes to keep',
 		before: _ => oldinput.remove(),
 		after: _ => main.submit('clip-proximity'),
 		payload

@@ -104,3 +104,22 @@ ${msg}`;
 
 	infopre.innerText = info;
 };
+
+export function attr({before, after, payload}) {
+	const input = document.createElement('input');
+
+	if (typeof before === 'function') before();
+
+	input.setAttribute('required', 'true');
+	input.setAttribute('placeholder', 'Dataset relevant fields');
+	input.addEventListener('change', function(e) {
+		payload['attrs'] = this.value.split(',').map(x => x.trim()).join(',');
+		if (typeof after === 'function') after(this);
+	});
+
+	form.prepend(input);
+
+	input.focus();
+
+	infopre.innerText = "It should be a comma-separated list. The other fields will be discarded.";
+};
