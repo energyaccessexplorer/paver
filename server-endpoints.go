@@ -71,8 +71,8 @@ func _socket(w http.ResponseWriter, r *http.Request) {
 }
 
 func server_endpoints(mux *http.ServeMux) {
-	mux.HandleFunc("/socket", _socket)
-	mux.HandleFunc("/routines", _routines)
+	mux.HandleFunc("/socket", jwt_check(_socket))
+	mux.HandleFunc("/routines", jwt_check(_routines))
 
 	mux.Handle("/", http.FileServer(http.Dir("public/")))
 }

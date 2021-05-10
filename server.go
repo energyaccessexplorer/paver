@@ -34,7 +34,7 @@ func serve() {
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 
 	fmt.Printf("JWT key is: %s\n", jwtkey)
-	fmt.Printf("Role claim is: %s\n", roles)
+	fmt.Printf("Roles claim is: %s\n", roles)
 
 	mux := http.NewServeMux()
 	server_endpoints(mux)

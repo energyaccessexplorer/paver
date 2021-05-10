@@ -1,5 +1,7 @@
 include .env
 
+CMD = paver -server -tmpdir /tmp -dir /tmp -role admin -role master -jwtkey ${JWTKEY}
+
 default: clean build server
 
 build:
@@ -20,7 +22,7 @@ clean:
 
 server:
 	@rm -rf /tmp/paver-server.sock
-	@./paver -server -jwtkey 1234 -role admin -tmpdir /tmp -dir /tmp
+	@./${CMD}
 
 cli:
 	@./paver -cli -c admin_boundaries \

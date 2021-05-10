@@ -2,8 +2,13 @@ import config from './config.js';
 
 export function listen(fn) {
 	const p = location.protocol === "https:" ? "wss" : "ws";
+	const o = {
+		headers: {
+			'Authorization': `Bearer ${token()}`
+		}
+	};
 
-	const c = new WebSocket(`${p}://${location.host}${config.base}/socket`);
+	const c = new WebSocket(`${p}://${location.host}${config.base}/socket`, o);
 
 	c.addEventListener("open", _ => console.info("connected!"));
 
