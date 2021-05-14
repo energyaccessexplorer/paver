@@ -44,7 +44,6 @@ func parse_flags() {
 
 	// SERVER flags
 	//
-	flag.StringVar(&dir, "dir", ".", "Directory where uploads should be finally stored.")
 	flag.StringVar(&tmpdir, "tmpdir", ".", "Directory where uploads should be stored whilst uploading.")
 
 	flag.StringVar(&jwtkey, "jwtkey", "", "Secret key to check JWT's.")

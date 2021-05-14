@@ -1,6 +1,6 @@
 include .env
 
-CMD = paver -server -tmpdir /tmp -dir /tmp -role admin -role master -jwtkey ${JWTKEY}
+CMD = paver -server -tmpdir /tmp -role admin -role master -jwtkey ${JWTKEY}
 
 default: clean build server
 
