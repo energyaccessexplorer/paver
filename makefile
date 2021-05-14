@@ -49,4 +49,9 @@ cli:
 
 	@ls -lh outputs
 
+install:
+	git pull
+	make build
+	sudo install -o root -g ubuntu -m 755 ./paver /usr/local/bin/paver
+
 all: clean build
