@@ -44,10 +44,6 @@ func parse_flags() {
 
 	// SERVER flags
 	//
-	flag.StringVar(&public, "public", ".", "Directory where the static assets are served from.")
-	flag.StringVar(&tmpdir, "tmpdir", ".", "Directory where uploads should be stored whilst uploading.")
-
-	flag.StringVar(&jwtkey, "jwtkey", "", "Secret key to check JWT's.")
 	flag.Var(&roles, "role", "Roles permitted in the JWT claims")
 
 	flag.Parse()

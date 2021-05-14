@@ -1,6 +1,6 @@
 include .env
 
-CMD = paver -server -tmpdir /tmp -public ${DIST}/public -role admin -role master -jwtkey ${JWTKEY}
+CMD = paver -server -role admin -role master
 
 default: clean build server
 
@@ -9,6 +9,9 @@ build:
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
 	go build -ldflags "-s \
+		-X main.jwtkey=${JWTKEY} \
+		-X main.tmpdir=${TMPDIR} \
+		-X main.public=${PUBLIC} \
 		-X main.S3KEY=${S3KEY} \
 		-X main.S3SECRET=${S3SECRET} \
 		-X main.S3PROVIDER=${S3PROVIDER} \
