@@ -52,6 +52,7 @@ cli:
 install:
 	git pull
 	make build
+	rsync -rv ./public/ ${PUBLIC}
 	sudo install -o root -g ubuntu -m 755 ./paver /usr/local/bin/paver
 
 all: clean build
