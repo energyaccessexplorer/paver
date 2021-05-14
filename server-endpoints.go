@@ -74,7 +74,7 @@ func server_endpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/socket", jwt_check(_socket))
 	mux.HandleFunc("/routines", jwt_check(_routines))
 
-	mux.Handle("/", http.FileServer(http.Dir("public/")))
+	mux.Handle("/", http.FileServer(http.Dir(public)))
 }
 
 func server_admin_boundaries(r *http.Request) (bool, error) {

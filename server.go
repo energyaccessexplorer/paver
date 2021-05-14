@@ -20,6 +20,7 @@ var (
 	jwtkey string
 	roles  arrayFlag
 	tmpdir string
+	public string
 )
 
 type handler func(w http.ResponseWriter, r *http.Request)
@@ -29,6 +30,7 @@ type formdata map[string][]byte
 func serve() {
 	check_server_flags()
 
+	fmt.Printf("Public directory is '%s'\n", public)
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 
 	fmt.Printf("JWT key is: %s\n", jwtkey)
@@ -49,6 +51,12 @@ func serve() {
 }
 
 func check_server_flags() {
+	p, err := os.Open(public)
+	if err != nil {
+		log.Fatal(errors.New("Specified public directory does not exist!"))
+	}
+	p.Close()
+
 	t, err := os.Open(tmpdir)
 	if err != nil {
 		log.Fatal(errors.New("Specified temporary directory does not exist!"))
