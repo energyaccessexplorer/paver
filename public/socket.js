@@ -4,7 +4,7 @@ export function listen(fn) {
 	const p = location.protocol === "https:" ? "wss" : "ws";
 	const o = {
 		headers: {
-			'Authorization': `Bearer ${token()}`
+			'Authorization': `Bearer ${localStorage.getItem('token')}`
 		}
 	};
 

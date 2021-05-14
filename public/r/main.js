@@ -9,10 +9,6 @@ const infopre = document.querySelector('pre');
 
 let _payload;
 
-function token() {
-	return localStorage.getItem('token');
-};
-
 export async function submit(r) {
 	const body = [];
 	for (const p in _payload)
@@ -31,7 +27,7 @@ export async function submit(r) {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/x-www-form-urlencoded',
-			'Authorization': `Bearer ${token()}`
+			'Authorization': `Bearer ${localStorage.getItem('token')}`
 		},
 		body: body.join("&"),
 	}).then(async r => {
