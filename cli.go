@@ -28,6 +28,10 @@ func (i *arrayFlag) Set(value string) error {
 }
 
 func cli() {
+	p := func(s string, x ...interface{}) {
+		println(fmt.Sprintf(s, x...))
+	}
+
 	if inputfile == "" {
 		panic("No -i (input file) given")
 	}
@@ -98,7 +102,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, _ := vectors_clip(inputfile, targetfile)
+			out, _ := vectors_clip(inputfile, targetfile, p)
 
 			println("clip output:", out)
 		}

@@ -50,6 +50,10 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
 
+	_w := func(s string, x ...interface{}) {
+		socketwrite(fmt.Sprintf(s, x...), r)
+	}
+
 	stripped, err := vectors_strip(in, fields)
 	if err != nil {
 		return false, err
@@ -68,7 +72,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	}
 	w("%s <- zeros", zeros)
 
-	clipped, err := vectors_clip(stripped, ref)
+	clipped, err := vectors_clip(stripped, ref, _w)
 	if err != nil {
 		return false, err
 	}

@@ -2,9 +2,9 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"github.com/energyaccessexplorer/gdal"
 	"os"
-	"strconv"
 	"strings"
 )
 
@@ -57,15 +57,23 @@ func vectors_reproject(in filename) (filename, error) {
 	return out, nil
 }
 
-func vectors_clip(in filename, container filename) (filename, error) {
+func vectors_clip(in filename, container filename, w reporter) (filename, error) {
+	w("vectors_clip")
+
 	out := _filename()
 
 	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
 	tar := gdal.OpenDataSource(container, 0).LayerByIndex(0)
 
+	tt, _ := src.FeatureCount(true)
+	w("	source feature count: %d", tt)
+
 	ct, _ := tar.FeatureCount(true)
+	w("	container feature count: %d", ct)
 	if ct > 1 {
-		return "", errors.New("Clipping only supports single-featured reference datasets. Got " + strconv.Itoa(ct))
+		return "", errors.New(fmt.Sprintf(
+			"	the container file has %d features. It should have 1. "+
+				"this is a configuration error on the geography.", ct))
 	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")
@@ -74,14 +82,20 @@ func vectors_clip(in filename, container filename) (filename, error) {
 	s := gdal.CreateSpatialReference("")
 	s.FromEPSG(4326)
 
-	result := ds.CreateLayer("Layer0", s, src.Type(), []string{})
+	res := ds.CreateLayer("Layer0", s, src.Type(), []string{})
 
-	err := src.Clip(tar, result, []string{})
+	w("	clipping...")
+	err := src.Clip(tar, res, []string{})
 	if err != nil {
 		return "", err
 	}
 
 	ds.Destroy()
+
+	l := gdal.OpenDataSource(out, 0).LayerByIndex(0)
+
+	rt, _ := l.FeatureCount(true)
+	w("	result feature count: %d", rt)
 
 	return out, err
 }
