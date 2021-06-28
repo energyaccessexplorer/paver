@@ -50,7 +50,7 @@ func parse_flags() {
 }
 
 func _filename() filename {
-	return uuid.NewV4().String()
+	return tmpdir + "/" + uuid.NewV4().String()
 }
 
 func trash(files ...filename) {

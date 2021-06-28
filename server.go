@@ -49,9 +49,15 @@ func serve() {
 }
 
 func check_server_flags() {
+	_, err := os.Stat(tmpdir)
+	if os.IsNotExist(err) {
+		log.Println(errors.New("Specified temporary directory does not exist. Creating..."))
+		os.Mkdir(tmpdir, 0755)
+	}
+
 	t, err := os.Open(tmpdir)
 	if err != nil {
-		log.Fatal(errors.New("Specified temporary directory does not exist!"))
+		log.Fatal(errors.New("Specified temporary directory (still) does not exist!"))
 	}
 	t.Close()
 
