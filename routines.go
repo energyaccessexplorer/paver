@@ -97,8 +97,8 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 		keeps := []filename{prox, clipped}
 
 		for _, f := range keeps {
-			s3put(f, true)
 			w("%s -> S3", f)
+			s3put(f, true)
 		}
 	}
 

@@ -1,6 +1,6 @@
 include .env
 
-CMD = paver -server -role admin -role master
+CMD = paver -server -role admin -role master -role root
 
 default: clean build server
 

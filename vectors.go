@@ -72,8 +72,8 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	w("	container feature count: %d", ct)
 	if ct > 1 {
 		return "", errors.New(fmt.Sprintf(
-			"	the container file has %d features. It should have 1. "+
-				"this is a configuration error on the geography.", ct))
+			"	The container file has %d features. It should have 1: the contour of the geography. \n"+
+				"This is a configuration error on the geography.", ct))
 	}
 
 	drv := gdal.OGRDriverByName("GeoJSON")

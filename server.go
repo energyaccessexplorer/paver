@@ -63,8 +63,8 @@ func check_server_flags() {
 	}
 	t.Close()
 
-	if jwtkey == "" {
-		log.Fatal(errors.New("I won't start without a secret-key!"))
+	if len(jwtkey) < 32 {
+		log.Fatal(errors.New("I won't start without a (proper) secret-key!"))
 	}
 }
 

@@ -3,7 +3,7 @@ import config from './config.js';
 export function listen(fn) {
 	const p = location.protocol === "https:" ? "wss" : "ws";
 
-	// TODO: authenticate socket connection?
+	// TODO: how authenticate socket connection?
 	const o = {
 		headers: {
 			'Authorization': `Bearer ${localStorage.getItem('token')}`
