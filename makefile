@@ -11,7 +11,6 @@ build:
 	go build -ldflags "-s \
 		-X main.jwtkey=${JWTKEY} \
 		-X main.tmpdir=${TMPDIR} \
-		-X main.public=${PUBLIC} \
 		-X main.S3KEY=${S3KEY} \
 		-X main.S3SECRET=${S3SECRET} \
 		-X main.S3PROVIDER=${S3PROVIDER} \
