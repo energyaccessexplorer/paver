@@ -42,6 +42,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 		for _, f := range keeps {
 			w("%s -> S3", f)
 			s3put(f)
+			trash(f)
 		}
 	}
 
@@ -102,6 +103,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 		for _, f := range keeps {
 			w("%s -> S3", f)
 			s3put(f)
+			trash(f)
 		}
 	}
 

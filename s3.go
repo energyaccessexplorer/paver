@@ -35,7 +35,7 @@ func s3sign(strs ...string) string {
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil))
 }
 
-func s3put(fname filename, rm bool) bool {
+func s3put(fname filename) bool {
 	file, err := os.Open(fname)
 	if err != nil {
 		panic(err.Error())
@@ -85,10 +85,6 @@ func s3put(fname filename, rm bool) bool {
 	fmt.Println(endpoint)
 
 	file.Close()
-
-	if rm {
-		trash(fname)
-	}
 
 	return true
 }
