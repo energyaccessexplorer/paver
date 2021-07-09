@@ -13,7 +13,7 @@ var (
 	socket *websocket.Conn
 )
 
-type server_routine func(*http.Request) (bool, error)
+type server_routine func(*http.Request) (string, error)
 
 var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
@@ -38,7 +38,11 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			io.WriteString(w, "don't know what you mean by: "+q)
 		} else {
-			if ok, err := rtn(r); !ok {
+			jsonstr, err := rtn(r)
+
+			if err == nil {
+				io.WriteString(w, jsonstr)
+			} else {
 				w.WriteHeader(http.StatusInternalServerError)
 				io.WriteString(w, err.Error())
 			}
@@ -75,7 +79,7 @@ func server_endpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/routines", jwt_check(_routines))
 }
 
-func server_admin_boundaries(r *http.Request) (bool, error) {
+func server_admin_boundaries(r *http.Request) (string, error) {
 	f := formdata{
 		"dataseturl": nil,
 		"field":      nil,
@@ -84,21 +88,23 @@ func server_admin_boundaries(r *http.Request) (bool, error) {
 	err := form_parse(&f, r)
 	inputfile, err := snatch(string(f["dataseturl"]))
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
-	if ok, err := routine_admin_boundaries(
+	jsonstr, err := routine_admin_boundaries(
 		r,
 		inputfile,
 		string(f["field"]),
-	); !ok {
-		return false, err
+	)
+
+	if err != nil {
+		return "", err
 	}
 
-	return true, nil
+	return jsonstr, nil
 }
 
-func server_clip_proximity(r *http.Request) (bool, error) {
+func server_clip_proximity(r *http.Request) (string, error) {
 	f := formdata{
 		"dataseturl":   nil,
 		"referenceurl": nil,
@@ -107,27 +113,29 @@ func server_clip_proximity(r *http.Request) (bool, error) {
 
 	err := form_parse(&f, r)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
 	inputfile, err := snatch(string(f["dataseturl"]))
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
 	referencefile, err := snatch(string(f["referenceurl"]))
 	if err != nil {
-		return false, err
+		return "", err
 	}
 
-	if ok, err := routine_clip_proximity(
+	jsonstr, err := routine_clip_proximity(
 		r,
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
-	); !ok {
-		return false, err
+	)
+
+	if err != nil {
+		return "", err
 	}
 
-	return true, nil
+	return jsonstr, nil
 }

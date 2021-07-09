@@ -7,82 +7,89 @@ import (
 
 type reporter func(string, ...interface{})
 
-func routine_admin_boundaries(r *http.Request, in filename, idfield string) (bool, error) {
+func routine_admin_boundaries(r *http.Request, in filename, idfield string) (string, error) {
+	w := func(s string, x ...interface{}) {
+		socketwrite(fmt.Sprintf(s+"\n", x...), r)
+	}
+
 	rprj, err := vectors_reproject(in)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	socketwrite(fmt.Sprintf("%s <- *reprojected", rprj), r)
+	w("%s <- *reprojected", rprj)
 
 	ids, err := raster_ids(rprj, idfield)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	socketwrite(fmt.Sprintf("%s <- raster ids", ids), r)
+	w("%s <- raster ids", ids)
 
 	stripped, err := vectors_strip(rprj, []string{idfield})
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	socketwrite(fmt.Sprintf("%s <- *stripped", stripped), r)
+	w("%s <- *stripped", stripped)
 
-	socketwrite(fmt.Sprintf("dataset info:\n%s", info(stripped)), r)
+	w("dataset info:\n%s", info(stripped))
 
-	socketwrite("clean up", r)
+	w("CLEAN UP")
+
 	trash(rprj)
 
 	if run_server {
 		keeps := []filename{ids, stripped}
 
 		for _, f := range keeps {
-			socketwrite(fmt.Sprintf("%s -> S3", f), r)
-			s3put(f, true)
+			w("%s -> S3", f)
+			s3put(f)
 		}
 	}
 
-	socketwrite("done!", r)
+	w("DONE")
 
-	return true, nil
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(stripped), _uuid(ids))
+
+	return jsonstr, nil
 }
 
-func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string) (bool, error) {
+func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string) (string, error) {
 	w := func(s string, x ...interface{}) {
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
 
 	stripped, err := vectors_strip(in, fields)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- stripped", stripped)
 
 	refprj, err := vectors_reproject(ref)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- reprojected reference", refprj)
 
 	zeros, err := raster_zeros(refprj)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- zeros", zeros)
 
 	clipped, err := vectors_clip(stripped, ref, w)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- *clipped", clipped)
 
 	rstr, err := raster_geometry(clipped, zeros)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- rasterised <- zeros", rstr) // overwrites zeros
 
 	prox, err := raster_proximity(rstr)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	w("%s <- *proximity", prox)
 
@@ -94,11 +101,13 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 
 		for _, f := range keeps {
 			w("%s -> S3", f)
-			s3put(f, true)
+			s3put(f)
 		}
 	}
 
 	w("DONE")
 
-	return true, nil
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(clipped), _uuid(prox))
+
+	return jsonstr, nil
 }
