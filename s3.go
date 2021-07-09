@@ -52,7 +52,7 @@ func s3put(fname filename, rm bool) bool {
 
 	timestamp := s3timestamp()
 
-	destination := strings.Join([]string{S3BUCKET, S3DIRECTORY, fname}, "/")
+	destination := strings.Join([]string{S3BUCKET, S3DIRECTORY, _uuid(fname)}, "/")
 
 	signature := s3sign(
 		"PUT",

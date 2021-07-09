@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"github.com/satori/go.uuid"
 	"os"
+	"regexp"
 )
 
 var (
 	run_server bool
 	run_cli    bool
 )
+
+var UUID_REGEXP = regexp.MustCompile("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")
 
 type filename = string
 
@@ -51,6 +54,10 @@ func parse_flags() {
 
 func _filename() filename {
 	return tmpdir + "/" + uuid.NewV4().String()
+}
+
+func _uuid(s string) string {
+	return fmt.Sprintf("%s", UUID_REGEXP.Find([]byte(s)))
 }
 
 func trash(files ...filename) {
