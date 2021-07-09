@@ -55,9 +55,7 @@ func _filename() filename {
 
 func trash(files ...filename) {
 	for _, f := range files {
-		if err := os.Remove(f); err == nil {
-			fmt.Println("rm", f)
-		} else {
+		if err := os.Remove(f); err != nil {
 			fmt.Println(err)
 		}
 	}

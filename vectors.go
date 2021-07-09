@@ -58,7 +58,7 @@ func vectors_reproject(in filename) (filename, error) {
 }
 
 func vectors_clip(in filename, container filename, w reporter) (filename, error) {
-	w("vectors_clip")
+	w("VECTORS CLIP")
 
 	out := _filename()
 

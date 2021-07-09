@@ -20,7 +20,6 @@ build:
 
 clean:
 	-rm -f paver
-	-rm -f ./outputs/*
 
 server:
 	@rm -rf /tmp/paver-server.sock

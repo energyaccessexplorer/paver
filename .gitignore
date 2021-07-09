@@ -1,8 +1,6 @@
 /paver
-/outputs
 /tmp
 /sample-data
-/gdal
 /.env
 /go.sum
 /public/lib/

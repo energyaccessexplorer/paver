@@ -50,10 +50,6 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
 
-	_w := func(s string, x ...interface{}) {
-		socketwrite(fmt.Sprintf(s, x...), r)
-	}
-
 	stripped, err := vectors_strip(in, fields)
 	if err != nil {
 		return false, err
@@ -72,7 +68,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	}
 	w("%s <- zeros", zeros)
 
-	clipped, err := vectors_clip(stripped, ref, _w)
+	clipped, err := vectors_clip(stripped, ref, w)
 	if err != nil {
 		return false, err
 	}
@@ -82,7 +78,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	if err != nil {
 		return false, err
 	}
-	w("%s <- rasterised <- zeros", rstr)
+	w("%s <- rasterised <- zeros", rstr) // overwrites zeros
 
 	prox, err := raster_proximity(rstr)
 	if err != nil {
@@ -90,11 +86,11 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	}
 	w("%s <- *proximity", prox)
 
-	w("clean up")
-	trash(in, ref, zeros, stripped, rstr, refprj)
+	w("CLEAN UP")
+	trash(in, ref, stripped, rstr, refprj)
 
 	if run_server {
-		keeps := []filename{prox, clipped}
+		keeps := []filename{clipped, prox}
 
 		for _, f := range keeps {
 			w("%s -> S3", f)
