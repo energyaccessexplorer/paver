@@ -12,7 +12,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
 
-	rprj, err := vectors_reproject(in)
+	rprj, err := vectors_reproject(in, 3857)
 	if err != nil {
 		return "", err
 	}
@@ -28,16 +28,22 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 	if err != nil {
 		return "", err
 	}
-	w("%s <- *stripped", stripped)
+	w("%s <- stripped", stripped)
 
-	w("dataset info:\n%s", info(stripped))
+	rprjstripped, err := vectors_reproject(in, 4326)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- *stripped reprojected", rprjstripped)
+
+	w("dataset info:\n%s", info(rprjstripped))
 
 	w("CLEAN UP")
 
-	trash(rprj)
+	trash(rprj, stripped)
 
 	if run_server {
-		keeps := []filename{ids, stripped}
+		keeps := []filename{ids, rprjstripped}
 
 		for _, f := range keeps {
 			w("%s -> S3", f)
@@ -48,7 +54,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 
 	w("DONE")
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(stripped), _uuid(ids))
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(rprjstripped), _uuid(ids))
 
 	return jsonstr, nil
 }
@@ -64,7 +70,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	}
 	w("%s <- stripped", stripped)
 
-	refprj, err := vectors_reproject(ref)
+	refprj, err := vectors_reproject(ref, 3857)
 	if err != nil {
 		return "", err
 	}

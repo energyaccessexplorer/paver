@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -31,11 +32,11 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 	return out, err
 }
 
-func vectors_reproject(in filename) (filename, error) {
+func vectors_reproject(in filename, epsg int) (filename, error) {
 	out := _filename()
 
 	opts := []string{
-		"-t_srs", "EPSG:3857",
+		"-t_srs", "EPSG:" + strconv.Itoa(epsg),
 	}
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
