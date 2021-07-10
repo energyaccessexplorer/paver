@@ -16,13 +16,13 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 	if err != nil {
 		return "", err
 	}
-	w("%s <- *reprojected", rprj)
+	w("%s <- reprojected", rprj)
 
 	ids, err := raster_ids(rprj, idfield)
 	if err != nil {
 		return "", err
 	}
-	w("%s <- raster ids", ids)
+	w("%s <- *raster ids", ids)
 
 	stripped, err := vectors_strip(rprj, []string{idfield})
 	if err != nil {

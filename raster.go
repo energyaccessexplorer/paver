@@ -46,18 +46,18 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	defer src.Close()
 
 	dest, err := gdal.OpenEx(dst, gdal.OFUpdate, nil, nil, nil)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	out, err := gdal.RasterizeOverwrite(dest, src, opts)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	defer out.Close()
 
@@ -79,12 +79,12 @@ func raster_proximity(in filename) (filename, error) {
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	drv, err := gdal.GetDriverByName("GTiff")
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 
 	opts2 := []string{
@@ -120,13 +120,13 @@ func raster_zeros(in filename) (filename, error) {
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	defer src.Close()
 
 	dest, err := gdal.Rasterize(out, src, opts)
 	if err != nil {
-		panic(err)
+		return "", err
 	}
 	defer dest.Close()
 

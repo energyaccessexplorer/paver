@@ -40,14 +40,12 @@ func vectors_reproject(in filename) (filename, error) {
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
-		panic(err)
 		return "", err
 	}
 	defer src.Close()
 
 	dst, err := gdal.VectorTranslate(out+".geojson", []gdal.Dataset{src}, opts)
 	if err != nil {
-		panic(err)
 		return "", err
 	}
 	dst.Close()
