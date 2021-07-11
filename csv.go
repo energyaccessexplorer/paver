@@ -81,7 +81,7 @@ func csv(in filename, fields []string) (filename, error) {
 					{
 						t, ok := f.FieldAsDateTime(i)
 						if !ok {
-							panic("csv: Failed to parse Date")
+							return "", errors.New("csv: Failed to parse Date")
 						}
 						s = fmt.Sprintf("%d-%d-%d", t.Year(), t.Month(), t.Day())
 					}
@@ -90,7 +90,7 @@ func csv(in filename, fields []string) (filename, error) {
 					{
 						t, ok := f.FieldAsDateTime(i)
 						if !ok {
-							panic("csv: Failed to parse DateTime")
+							return "", errors.New("csv: Failed to parse DateTime")
 						}
 
 						s = t.Format(time.RFC3339)
@@ -100,7 +100,7 @@ func csv(in filename, fields []string) (filename, error) {
 					s = fmt.Sprintf("%d", f.FieldAsInteger64(i))
 
 				default:
-					panic("I don't know this type!")
+					return "", errors.New("I don't know this type!")
 				}
 			}
 

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -38,12 +39,14 @@ func s3sign(strs ...string) string {
 func s3put(fname filename) bool {
 	file, err := os.Open(fname)
 	if err != nil {
-		panic(err.Error())
+		log.Println(err.Error())
+		return false
 	}
 
 	chksum := md5.New()
 	if _, err := io.Copy(chksum, file); err != nil {
-		panic(err.Error())
+		log.Println(err.Error())
+		return false
 	}
 	contentmd5 := base64.StdEncoding.EncodeToString(chksum.Sum(nil))
 

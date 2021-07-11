@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"log"
 	"strconv"
 )
 
@@ -21,6 +22,8 @@ func info_featurecount(in filename) int {
 }
 
 func info_bounds(in filename) gdal.Geometry {
+	none := gdal.Create(gdal.GT_None)
+
 	t := gdal.CreateSpatialReference("")
 	t.FromEPSG(4326)
 
@@ -30,7 +33,8 @@ func info_bounds(in filename) gdal.Geometry {
 
 	env, err := layer.Extent(true)
 	if err != nil {
-		panic(err)
+		log.Println("Failed to get layer extent")
+		return none
 	}
 
 	// text := fmt.Sprintf(
@@ -50,20 +54,23 @@ func info_bounds(in filename) gdal.Geometry {
 
 	v, ok := geom.SpatialReference().AttrValue("AUTHORITY", 1)
 	if !ok {
-		panic(ok)
+		log.Println("Failed setting AUTHORITY to spatial reference")
+		return none
 	}
 
 	s := gdal.CreateSpatialReference("")
 	i, err := strconv.Atoi(v)
 	if err != nil {
-		panic(err)
+		log.Println(err.Error())
+		return none
 	}
 
 	s.FromEPSG(i)
 
 	g, err := gdal.CreateFromWKT(text, s)
 	if err != nil {
-		panic(err)
+		log.Println(err.Error())
+		return none
 	}
 
 	return g
@@ -86,7 +93,12 @@ func info_fields(in filename) []string {
 }
 
 func info(in filename) string {
-	e := info_bounds(in).Envelope()
+	b := info_bounds(in)
+	if b.Type() == gdal.GT_None {
+		return "Info bounds returned a garbage geometry"
+	}
+
+	e := b.Envelope()
 
 	i := dataset_info{
 		info_fields(in),
