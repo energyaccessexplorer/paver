@@ -8,10 +8,17 @@ import (
 	"strconv"
 )
 
+type bounds struct {
+	Left   float64
+	Bottom float64
+	Right  float64
+	Top    float64
+}
+
 type dataset_info struct {
-	Fields       []string   `json:"fields"`
-	FeatureCount int        `json:"featurecount"`
-	Bounds       [4]float64 `json:"bounds"`
+	Fields       []string `json:"fields"`
+	FeatureCount int      `json:"featurecount"`
+	Bounds       bounds   `json:"bounds"`
 }
 
 func info_featurecount(in filename) int {
@@ -103,7 +110,7 @@ func info(in filename) string {
 	i := dataset_info{
 		info_fields(in),
 		info_featurecount(in),
-		[4]float64{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
+		bounds{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
 	}
 
 	j, err := json.Marshal(i)

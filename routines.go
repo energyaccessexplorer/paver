@@ -36,7 +36,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 	}
 	w("%s <- *stripped reprojected", rprjstripped)
 
-	w("dataset info:\n%s", info(rprjstripped))
+	info := info(rprjstripped)
 
 	w("CLEAN UP")
 
@@ -54,7 +54,12 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 
 	w("DONE")
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(rprjstripped), _uuid(ids))
+	jsonstr := fmt.Sprintf(
+		`{ "vectors": "%s", "raster": "%s", "info": %s }`,
+		_uuid(rprjstripped),
+		_uuid(ids),
+		info,
+	)
 
 	return jsonstr, nil
 }
