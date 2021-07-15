@@ -132,6 +132,15 @@ func cli() {
 			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield})
 		}
 
+	case "routine_crop_raster":
+		{
+			if referencefile == "" {
+				panic("No -r (referencefile) given:")
+			}
+
+			routine_crop_raster(nil, inputfile, referencefile)
+		}
+
 	default:
 		{
 			println("No (valid) -c command given:", command)

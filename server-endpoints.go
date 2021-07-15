@@ -18,6 +18,7 @@ type server_routine func(*http.Request) (string, error)
 var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
 	"clip-proximity":   server_clip_proximity,
+	"crop-raster":      server_crop_raster,
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +132,40 @@ func server_clip_proximity(r *http.Request) (string, error) {
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return jsonstr, nil
+}
+
+func server_crop_raster(r *http.Request) (string, error) {
+	f := formdata{
+		"dataseturl":   nil,
+		"referenceurl": nil,
+	}
+
+	err := form_parse(&f, r)
+	if err != nil {
+		return "", err
+	}
+
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return "", err
+	}
+
+	referencefile, err := snatch(string(f["referenceurl"]))
+	if err != nil {
+		return "", err
+	}
+
+	jsonstr, err := routine_crop_raster(
+		r,
+		inputfile,
+		referencefile,
 	)
 
 	if err != nil {

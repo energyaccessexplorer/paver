@@ -124,3 +124,33 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 
 	return jsonstr, nil
 }
+
+func routine_crop_raster(r *http.Request, in filename, ref filename) (string, error) {
+	w := func(s string, x ...interface{}) {
+		socketwrite(fmt.Sprintf(s+"\n", x...), r)
+	}
+
+	cropped, err := raster_crop(in, ref, w)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- cropped", cropped)
+
+	w("CLEAN UP")
+
+	if run_server {
+		keeps := []filename{cropped}
+
+		for _, f := range keeps {
+			w("%s -> S3", f)
+			s3put(f)
+			trash(f)
+		}
+	}
+
+	w("DONE")
+
+	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, _uuid(cropped))
+
+	return jsonstr, nil
+}

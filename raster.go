@@ -132,3 +132,37 @@ func raster_zeros(in filename) (filename, error) {
 
 	return out, err
 }
+
+func raster_crop(in filename, container filename, w reporter) (filename, error) {
+	w("RASTER CROP")
+
+	out := _filename()
+
+	opts := []string{
+		"-cutline", container,
+		"-crop_to_cutline",
+		"-cl", gdal.OpenDataSource(container, 0).LayerByIndex(0).Name(),
+		"-of", "GTiff",
+		"-t_srs", "EPSG:3857",
+		"-tr", "1000", "1000",
+		"-dstnodata", "-1",
+		"-co", "COMPRESS=DEFLATE",
+		"-co", "PREDICTOR=1",
+		"-co", "ZLEVEL=9",
+	}
+
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+
+	defer src.Close()
+
+	dest, err := gdal.Warp(out, []gdal.Dataset{src}, opts)
+	if err != nil {
+		return "", err
+	}
+	defer dest.Close()
+
+	return out, nil
+}
