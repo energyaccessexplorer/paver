@@ -7,11 +7,14 @@ import (
 )
 
 func raster_ids(in filename, gid string) (filename, error) {
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
 	out := _filename()
 
-	//  -a Identifies an attribute field on the features to be used for a burn-in
-	//     value. The value will be burned into all output bands.
-	//
 	opts := []string{
 		"-a", gid,
 		"-a_nodata", "-1",
@@ -24,12 +27,6 @@ func raster_ids(in filename, gid string) (filename, error) {
 		"-co", "ZLEVEL=9",
 	}
 
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	defer src.Close()
-
 	dest, err := gdal.Rasterize(out, src, opts)
 	if err != nil {
 		return "", err
@@ -40,11 +37,6 @@ func raster_ids(in filename, gid string) (filename, error) {
 }
 
 func raster_geometry(in filename, dst filename) (filename, error) {
-	opts := []string{
-		"-l", gdal.OpenDataSource(in, 0).LayerByIndex(0).Name(),
-		"-burn", "1",
-	}
-
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -54,6 +46,11 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 	dest, err := gdal.OpenEx(dst, gdal.OFUpdate, nil, nil, nil)
 	if err != nil {
 		return "", err
+	}
+
+	opts := []string{
+		"-l", gdal.OpenDataSource(in, 0).LayerByIndex(0).Name(),
+		"-burn", "1",
 	}
 
 	out, err := gdal.RasterizeOverwrite(dest, src, opts)
@@ -68,16 +65,6 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 }
 
 func raster_proximity(in filename) (filename, error) {
-	out := _filename()
-
-	opts := []string{
-		"DISTUNITS=PIXEL",
-		"VALUES=1",
-		"NODATA=-1",
-		"USE_INPUT_NODATA=YES",
-		fmt.Sprintf("MAXDIST=%d", 512),
-	}
-
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -86,6 +73,16 @@ func raster_proximity(in filename) (filename, error) {
 	drv, err := gdal.GetDriverByName("GTiff")
 	if err != nil {
 		return "", err
+	}
+
+	out := _filename()
+
+	opts := []string{
+		"DISTUNITS=PIXEL",
+		"VALUES=1",
+		"NODATA=-1",
+		"USE_INPUT_NODATA=YES",
+		fmt.Sprintf("MAXDIST=%d", 512),
 	}
 
 	opts2 := []string{
@@ -105,6 +102,12 @@ func raster_proximity(in filename) (filename, error) {
 }
 
 func raster_zeros(in filename) (filename, error) {
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
 	out := _filename()
 
 	opts := []string{
@@ -118,12 +121,6 @@ func raster_zeros(in filename) (filename, error) {
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
 	}
-
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	defer src.Close()
 
 	dest, err := gdal.Rasterize(out, src, opts)
 	if err != nil {
@@ -143,6 +140,12 @@ func raster_crop(in filename, base filename, ref filename, w reporter) (filename
 	}
 	defer r.Close()
 
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
 	out := _filename()
 
 	opts := []string{
@@ -157,13 +160,6 @@ func raster_crop(in filename, base filename, ref filename, w reporter) (filename
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
 	}
-
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-
-	defer src.Close()
 
 	dest, err := gdal.Warp(out, []gdal.Dataset{src}, opts)
 	if err != nil {
