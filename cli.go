@@ -12,6 +12,7 @@ var (
 
 	command       string
 	inputfile     string
+	basefile      string
 	referencefile string
 	targetfile    string
 )
@@ -138,7 +139,11 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_crop_raster(nil, inputfile, referencefile)
+			if basefile == "" {
+				panic("No -r (referencefile) given:")
+			}
+
+			routine_crop_raster(nil, inputfile, basefile, referencefile)
 		}
 
 	default:

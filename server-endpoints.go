@@ -144,6 +144,7 @@ func server_clip_proximity(r *http.Request) (string, error) {
 func server_crop_raster(r *http.Request) (string, error) {
 	f := formdata{
 		"dataseturl":   nil,
+		"baseurl":      nil,
 		"referenceurl": nil,
 	}
 
@@ -157,6 +158,11 @@ func server_crop_raster(r *http.Request) (string, error) {
 		return "", err
 	}
 
+	basefile, err := snatch(string(f["baseurl"]))
+	if err != nil {
+		return "", err
+	}
+
 	referencefile, err := snatch(string(f["referenceurl"]))
 	if err != nil {
 		return "", err
@@ -165,6 +171,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 	jsonstr, err := routine_crop_raster(
 		r,
 		inputfile,
+		basefile,
 		referencefile,
 	)
 

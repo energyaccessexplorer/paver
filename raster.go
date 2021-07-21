@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"strconv"
 )
 
 func raster_ids(in filename, gid string) (filename, error) {
@@ -133,18 +134,24 @@ func raster_zeros(in filename) (filename, error) {
 	return out, err
 }
 
-func raster_crop(in filename, container filename, w reporter) (filename, error) {
+func raster_crop(in filename, base filename, ref filename, w reporter) (filename, error) {
 	w("RASTER CROP")
+
+	r, err := gdal.OpenEx(base, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
 
 	out := _filename()
 
 	opts := []string{
-		"-cutline", container,
+		"-cutline", ref,
 		"-crop_to_cutline",
-		"-cl", gdal.OpenDataSource(container, 0).LayerByIndex(0).Name(),
+		"-cl", gdal.OpenDataSource(ref, 0).LayerByIndex(0).Name(),
 		"-of", "GTiff",
+		"-ts", strconv.Itoa(r.RasterXSize()), strconv.Itoa(r.RasterYSize()),
 		"-t_srs", "EPSG:3857",
-		"-tr", "1000", "1000",
 		"-dstnodata", "-1",
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
