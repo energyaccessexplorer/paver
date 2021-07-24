@@ -1,10 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
 	"strconv"
 )
+
+type raster_config struct {
+	Numbertype string `json:"numbertype"`
+	Nodata     int    `json:"nodata"`
+	Resample   string `json:"resample"`
+}
 
 func raster_ids(in filename, gid string) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
@@ -17,8 +24,8 @@ func raster_ids(in filename, gid string) (filename, error) {
 
 	opts := []string{
 		"-a", gid,
-		"-a_nodata", "-1",
 		"-a_srs", "EPSG:3857",
+		"-a_nodata", "-1",
 		"-tr", "1000", "1000",
 		"-of", "GTiff",
 		"-ot", "Int16",
@@ -78,20 +85,18 @@ func raster_proximity(in filename) (filename, error) {
 	out := _filename()
 
 	opts := []string{
+		"-ot", "Int16",
+		"-nodata", "-1",
 		"DISTUNITS=PIXEL",
 		"VALUES=1",
-		"NODATA=-1",
 		"USE_INPUT_NODATA=YES",
 		fmt.Sprintf("MAXDIST=%d", 512),
+		"-co", "COMPRESS=DEFLATE",
+		"-co", "PREDICTOR=1",
+		"-co", "ZLEVEL=9",
 	}
 
-	opts2 := []string{
-		"COMPRESS=DEFLATE",
-		"PREDICTOR=1",
-		"ZLEVEL=9",
-	}
-
-	ds := drv.CreateCopy(out, src, 0, opts2, gdal.DummyProgress, nil)
+	ds := drv.CreateCopy(out, src, 0, []string{}, gdal.DummyProgress, nil)
 	err = src.
 		RasterBand(1).
 		ComputeProximity(ds.RasterBand(1), opts, gdal.DummyProgress, nil)
@@ -117,9 +122,6 @@ func raster_zeros(in filename) (filename, error) {
 		"-tr", "1000", "1000",
 		"-of", "GTiff",
 		"-ot", "Int16",
-		"-co", "COMPRESS=DEFLATE",
-		"-co", "PREDICTOR=1",
-		"-co", "ZLEVEL=9",
 	}
 
 	dest, err := gdal.Rasterize(out, src, opts)
@@ -131,8 +133,11 @@ func raster_zeros(in filename) (filename, error) {
 	return out, err
 }
 
-func raster_crop(in filename, base filename, ref filename, w reporter) (filename, error) {
+func raster_crop(in filename, base filename, ref filename, conf string, w reporter) (filename, error) {
 	w("RASTER CROP")
+
+	var c raster_config
+	err := json.Unmarshal([]byte(conf), &c)
 
 	r, err := gdal.OpenEx(base, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
@@ -155,7 +160,9 @@ func raster_crop(in filename, base filename, ref filename, w reporter) (filename
 		"-of", "GTiff",
 		"-ts", strconv.Itoa(r.RasterXSize()), strconv.Itoa(r.RasterYSize()),
 		"-t_srs", "EPSG:3857",
-		"-dstnodata", "-1",
+		"-ot", c.Numbertype,
+		"-dstnodata", strconv.Itoa(c.Nodata),
+		"-r", c.Resample,
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",

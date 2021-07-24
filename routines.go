@@ -125,12 +125,12 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	return jsonstr, nil
 }
 
-func routine_crop_raster(r *http.Request, in filename, base filename, ref filename) (string, error) {
+func routine_crop_raster(r *http.Request, in filename, base filename, ref filename, conf string) (string, error) {
 	w := func(s string, x ...interface{}) {
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
 
-	cropped, err := raster_crop(in, base, ref, w)
+	cropped, err := raster_crop(in, base, ref, conf, w)
 	if err != nil {
 		return "", err
 	}

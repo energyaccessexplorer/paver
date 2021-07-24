@@ -146,6 +146,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 		"dataseturl":   nil,
 		"baseurl":      nil,
 		"referenceurl": nil,
+		"config":       nil,
 	}
 
 	err := form_parse(&f, r)
@@ -168,11 +169,14 @@ func server_crop_raster(r *http.Request) (string, error) {
 		return "", err
 	}
 
+	configjson := string(f["config"])
+
 	jsonstr, err := routine_crop_raster(
 		r,
 		inputfile,
 		basefile,
 		referencefile,
+		configjson,
 	)
 
 	if err != nil {
