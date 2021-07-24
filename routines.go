@@ -7,7 +7,7 @@ import (
 
 type reporter func(string, ...interface{})
 
-func routine_admin_boundaries(r *http.Request, in filename, idfield string) (string, error) {
+func routine_admin_boundaries(r *http.Request, in filename, idfield string, resolution int) (string, error) {
 	w := func(s string, x ...interface{}) {
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
@@ -18,7 +18,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 	}
 	w("%s <- reprojected", rprj)
 
-	ids, err := raster_ids(rprj, idfield)
+	ids, err := raster_ids(rprj, idfield, resolution)
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +64,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string) (str
 	return jsonstr, nil
 }
 
-func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string) (string, error) {
+func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string, resolution int) (string, error) {
 	w := func(s string, x ...interface{}) {
 		socketwrite(fmt.Sprintf(s+"\n", x...), r)
 	}
@@ -81,7 +81,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	}
 	w("%s <- reprojected reference", refprj)
 
-	zeros, err := raster_zeros(refprj)
+	zeros, err := raster_zeros(refprj, resolution)
 	if err != nil {
 		return "", err
 	}

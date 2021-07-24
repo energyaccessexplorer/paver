@@ -50,7 +50,7 @@ func cli() {
 
 	case "zeros":
 		{
-			out, _ := raster_zeros(inputfile)
+			out, _ := raster_zeros(inputfile, 1000)
 
 			println("zeroes output:", out)
 		}
@@ -92,7 +92,7 @@ func cli() {
 
 	case "idsraster":
 		{
-			out, _ := raster_ids(inputfile, idfield)
+			out, _ := raster_ids(inputfile, idfield, 1000)
 
 			println("ids_raster output:", out)
 		}
@@ -121,7 +121,7 @@ func cli() {
 
 	case "admin_boundaries":
 		{
-			routine_admin_boundaries(nil, inputfile, idfield)
+			routine_admin_boundaries(nil, inputfile, idfield, 1000)
 		}
 
 	case "routine_clip_proximity":
@@ -130,7 +130,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield})
+			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield}, 1000)
 		}
 
 	case "routine_crop_raster":

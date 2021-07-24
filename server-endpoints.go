@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"nhooyr.io/websocket"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -84,6 +85,7 @@ func server_admin_boundaries(r *http.Request) (string, error) {
 	f := formdata{
 		"dataseturl": nil,
 		"field":      nil,
+		"resolution": nil,
 	}
 
 	err := form_parse(&f, r)
@@ -92,10 +94,13 @@ func server_admin_boundaries(r *http.Request) (string, error) {
 		return "", err
 	}
 
+	res, _ := strconv.Atoi(string(f["resolution"]))
+
 	jsonstr, err := routine_admin_boundaries(
 		r,
 		inputfile,
 		string(f["field"]),
+		res,
 	)
 
 	if err != nil {
@@ -110,6 +115,7 @@ func server_clip_proximity(r *http.Request) (string, error) {
 		"dataseturl":   nil,
 		"referenceurl": nil,
 		"fields":       nil,
+		"resolution":   nil,
 	}
 
 	err := form_parse(&f, r)
@@ -127,11 +133,14 @@ func server_clip_proximity(r *http.Request) (string, error) {
 		return "", err
 	}
 
+	res, _ := strconv.Atoi(string(f["resolution"]))
+
 	jsonstr, err := routine_clip_proximity(
 		r,
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
+		res,
 	)
 
 	if err != nil {

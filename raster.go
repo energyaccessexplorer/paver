@@ -13,7 +13,7 @@ type raster_config struct {
 	Resample   string `json:"resample"`
 }
 
-func raster_ids(in filename, gid string) (filename, error) {
+func raster_ids(in filename, gid string, resolution int) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -22,11 +22,13 @@ func raster_ids(in filename, gid string) (filename, error) {
 
 	out := _filename()
 
+	res := strconv.Itoa(resolution)
+
 	opts := []string{
 		"-a", gid,
 		"-a_srs", "EPSG:3857",
 		"-a_nodata", "-1",
-		"-tr", "1000", "1000",
+		"-tr", res, res,
 		"-of", "GTiff",
 		"-ot", "Int16",
 		"-co", "COMPRESS=DEFLATE",
@@ -106,7 +108,7 @@ func raster_proximity(in filename) (filename, error) {
 	return out, err
 }
 
-func raster_zeros(in filename) (filename, error) {
+func raster_zeros(in filename, resolution int) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -115,11 +117,13 @@ func raster_zeros(in filename) (filename, error) {
 
 	out := _filename()
 
+	res := strconv.Itoa(resolution)
+
 	opts := []string{
 		"-burn", "0",
 		"-a_nodata", "-1",
 		"-a_srs", "EPSG:3857",
-		"-tr", "1000", "1000",
+		"-tr", res, res,
 		"-of", "GTiff",
 		"-ot", "Int16",
 	}
