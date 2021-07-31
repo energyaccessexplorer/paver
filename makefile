@@ -27,6 +27,9 @@ server:
 	@./${CMD}
 
 cli:
+	@./paver -cli -c s3put \
+		-i ${POLYGON_SHP}
+
 	@./paver -cli -c admin_boundaries \
 		-i ${POLYGON_SHP} \
 		-g DistrictID

@@ -146,6 +146,11 @@ func cli() {
 			routine_crop_raster(nil, inputfile, basefile, referencefile, "{\"nodata\": -1, \"numbertype\": \"Int16\", \"resample\": \"average\"}")
 		}
 
+	case "s3put":
+		{
+			s3put(inputfile)
+		}
+
 	default:
 		{
 			println("No (valid) -c command given:", command)
