@@ -157,12 +157,23 @@ func raster_crop(in filename, base filename, ref filename, conf string, w report
 
 	out := _filename()
 
+	layer := gdal.OpenDataSource(ref, 0).LayerByIndex(0).Name()
+	w(" cropping to first layer: %s", layer)
+
+	x := r.RasterXSize()
+	y := r.RasterYSize()
+	w(" raster size: (%d,%d)", x, y)
+
+	w(" numbertype: %s", c.Numbertype)
+	w(" nodata: %s", c.Nodata)
+	w(" resampling method: %s", c.Resample)
+
 	opts := []string{
 		"-cutline", ref,
 		"-crop_to_cutline",
-		"-cl", gdal.OpenDataSource(ref, 0).LayerByIndex(0).Name(),
+		"-cl", layer,
 		"-of", "GTiff",
-		"-ts", strconv.Itoa(r.RasterXSize()), strconv.Itoa(r.RasterYSize()),
+		"-ts", strconv.Itoa(x), strconv.Itoa(y),
 		"-t_srs", "EPSG:3857",
 		"-ot", c.Numbertype,
 		"-dstnodata", strconv.Itoa(c.Nodata),
