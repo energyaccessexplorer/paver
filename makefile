@@ -52,4 +52,11 @@ install:
 	make build
 	sudo install -o root -g ubuntu -m 755 ./paver /usr/local/bin/paver
 
+deploy:
+	-ssh eae "sudo pkill -9 paver"
+	ssh eae "sudo rm -f /tmp/paver-server.sock"
+
+	ssh eae "cd ~/paver; make install;"
+	ssh eae "${CMD}" &
+
 all: clean build
