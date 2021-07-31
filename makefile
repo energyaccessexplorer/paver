@@ -22,6 +22,7 @@ clean:
 	-rm -f paver
 
 server:
+	-@pkill -9 paver
 	@rm -rf /tmp/paver-server.sock
 	@./${CMD}
 
@@ -50,7 +51,9 @@ cli:
 install:
 	git pull
 	make build
-	sudo install -o root -g ubuntu -m 755 ./paver /usr/local/bin/paver
+	sudo install -o root -g ubuntu -m 755 \
+		paver paver-check \
+		/usr/local/bin/
 
 deploy:
 	-ssh eae "sudo pkill -9 paver"

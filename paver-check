@@ -1,0 +1,20 @@
+#!/bin/sh
+
+function tb {
+	eae-telegram-bot "Paver Check. FAILED: $1" >/dev/null
+}
+
+function request {
+	curl --silent --fail --location $@ >/dev/null || return 1
+}
+
+if ! pgrep -xf "paver -server" >/dev/null; then
+	tb "Paver not running. Trying to restart it..."
+	paver -server -role admin -role master -role root
+	exit 1
+fi
+
+if ! request --unix-socket /tmp/paver-server.sock http://localhost/; then
+	tb "Socket Error"
+	exit 1
+fi
