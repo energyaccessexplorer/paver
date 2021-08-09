@@ -16,7 +16,7 @@ if ! pgrep -xf "$CMD" >/dev/null; then
 	exit 1
 fi
 
-if ! request --unix-socket /tmp/paver-server.sock http://localhost/; then
+if ! request --unix-socket /tmp/paver-server.sock http://localhost/check; then
 	tb "Socket Error"
 	exit 1
 fi
