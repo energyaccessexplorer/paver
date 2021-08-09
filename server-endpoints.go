@@ -76,7 +76,17 @@ func _socket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func _check(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case "GET":
+		w.WriteHeader(http.StatusOK)
+	}
+
+	io.WriteString(w, "TJA!")
+}
+
 func server_endpoints(mux *http.ServeMux) {
+	mux.HandleFunc("/check", _check)
 	mux.HandleFunc("/socket", _socket) // TODO: authenticate socket connections
 	mux.HandleFunc("/routines", jwt_check(_routines))
 }
