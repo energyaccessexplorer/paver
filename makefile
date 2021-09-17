@@ -58,7 +58,7 @@ cli:
 
 install:
 	git pull
-	make build
+	bmake build
 	sudo install -o root -g ubuntu -m 755 \
 		paver paver-check \
 		/usr/local/bin/
@@ -71,7 +71,7 @@ deploy:
 	-ssh eae "sudo pkill -9 paver"
 	ssh eae "sudo rm -f /tmp/paver-server.sock"
 
-	ssh eae "cd ~/paver; make install;"
+	ssh eae "cd ~/paver; bmake install;"
 	ssh eae "${CMD}" &
 
 all: clean build
