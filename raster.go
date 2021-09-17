@@ -137,7 +137,7 @@ func raster_zeros(in filename, resolution int) (filename, error) {
 	return out, err
 }
 
-func raster_crop(in filename, base filename, ref filename, conf string, w reporter) (filename, error) {
+func raster_crop(in filename, base filename, ref filename, conf string, res int, w reporter) (filename, error) {
 	w("RASTER CROP")
 
 	var c raster_config
@@ -162,13 +162,29 @@ func raster_crop(in filename, base filename, ref filename, conf string, w report
 
 	x := r.RasterXSize()
 	y := r.RasterYSize()
+
 	w(" raster size: (%d,%d)", x, y)
-
 	w(" numbertype: %s", c.Numbertype)
-	w(" nodata: %s", c.Nodata)
+	w(" nodata: %d", c.Nodata)
 	w(" resampling method: %s", c.Resample)
+	w(" resolution: %d", res)
 
-	opts := []string{
+	r_out := _filename()
+
+	r_opts := []string{
+		"-of", "GTiff",
+		"-t_srs", "EPSG:3857",
+		"-tr", strconv.Itoa(res), strconv.Itoa(res),
+		"-r", c.Resample,
+	}
+
+	r_src, err := gdal.Warp(r_out, []gdal.Dataset{src}, r_opts)
+	if err != nil {
+		return "", err
+	}
+	defer r_src.Close()
+
+	c_opts := []string{
 		"-cutline", ref,
 		"-crop_to_cutline",
 		"-cl", layer,
@@ -177,13 +193,12 @@ func raster_crop(in filename, base filename, ref filename, conf string, w report
 		"-t_srs", "EPSG:3857",
 		"-ot", c.Numbertype,
 		"-dstnodata", strconv.Itoa(c.Nodata),
-		"-r", c.Resample,
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
 	}
 
-	dest, err := gdal.Warp(out, []gdal.Dataset{src}, opts)
+	dest, err := gdal.Warp(out, []gdal.Dataset{r_src}, c_opts)
 	if err != nil {
 		return "", err
 	}

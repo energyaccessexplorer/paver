@@ -166,6 +166,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 		"baseurl":      nil,
 		"referenceurl": nil,
 		"config":       nil,
+		"resolution":   nil,
 	}
 
 	err := form_parse(&f, r)
@@ -188,6 +189,8 @@ func server_crop_raster(r *http.Request) (string, error) {
 		return "", err
 	}
 
+	res, _ := strconv.Atoi(string(f["resolution"]))
+
 	configjson := string(f["config"])
 
 	jsonstr, err := routine_crop_raster(
@@ -196,6 +199,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 		basefile,
 		referencefile,
 		configjson,
+		res,
 	)
 
 	if err != nil {

@@ -143,7 +143,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_crop_raster(nil, inputfile, basefile, referencefile, "{\"nodata\": -1, \"numbertype\": \"Int16\", \"resample\": \"average\"}")
+			routine_crop_raster(nil, inputfile, basefile, referencefile, "{\"nodata\": -1, \"numbertype\": \"Int16\", \"resample\": \"average\"}", 1000)
 		}
 
 	case "s3put":
