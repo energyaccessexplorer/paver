@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CMD="paver -server -role admin -role master -role root"
+SOCKET="/tmp/paver-server.sock"
 
 tb() {
 	eae-telegram-bot "Paver Check. FAILED: $1" >/dev/null
@@ -10,13 +10,13 @@ request() {
 	curl --silent --fail --location $@ >/dev/null || return 1
 }
 
-if ! pgrep -xf "$CMD" >/dev/null; then
+if ! pgrep -f "paver -server" >/dev/null; then
 	tb "Paver not running. Trying to restart it..."
-	$CMD
+	sudo systemct restart paver.service
 	exit 1
 fi
 
-if ! request --unix-socket /tmp/paver-server.sock http://localhost/check; then
+if ! request --unix-socket $SOCKET http://localhost/check; then
 	tb "Socket Error"
 	exit 1
 fi

@@ -1,0 +1,13 @@
+[Unit]
+Description=Paver service
+Requires=nginx.service
+Requires=postgresql.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/var/www/html/paver
+ExecStartPre=rm -f ${SOCKET}
+ExecStart=${CMD}
+
+[Install]
+WantedBy=multi-user.target

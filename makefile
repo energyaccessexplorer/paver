@@ -1,6 +1,7 @@
 include .env
 
 CMD = paver -server -role admin -role master -role root
+SOCKET = /tmp/paver-server.sock
 
 default: clean build server
 
@@ -17,6 +18,10 @@ build:
 		-X main.S3BUCKET=${S3BUCKET} \
 		-X main.S3DIRECTORY=${S3DIRECTORY} \
 		-X main.S3ACL=${S3ACL}"
+
+.export CMD
+.export SOCKET
+	@envsubst <paver.service-tmpl >paver.service
 
 clean:
 	-rm -f paver
@@ -57,6 +62,10 @@ install:
 	sudo install -o root -g ubuntu -m 755 \
 		paver paver-check \
 		/usr/local/bin/
+
+	sudo install -o root -g root -m 644 \
+		paver.service \
+		/etc/systemd/system/
 
 deploy:
 	-ssh eae "sudo pkill -9 paver"
