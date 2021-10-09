@@ -23,9 +23,12 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 	}
 	defer src.Close()
 
+	release := capture()
 	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	defer dest.Close()
 
@@ -45,9 +48,12 @@ func vectors_reproject(in filename, epsg int) (filename, error) {
 	}
 	defer src.Close()
 
+	release := capture()
 	dst, err := gdal.VectorTranslate(out+".geojson", []gdal.Dataset{src}, opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	dst.Close()
 
@@ -84,9 +90,12 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	res := ds.CreateLayer("Layer0", s, src.Type(), []string{})
 
 	w("	clipping...")
+	release := capture()
 	err := src.Clip(tar, res, []string{})
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 
 	ds.Destroy()

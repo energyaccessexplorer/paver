@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"github.com/satori/go.uuid"
+	"io"
 	"os"
 	"regexp"
+	"syscall"
 )
 
 var (
@@ -65,5 +68,23 @@ func trash(files ...filename) {
 		if err := os.Remove(f); err != nil {
 			fmt.Println(err)
 		}
+	}
+}
+
+func capture() func() string {
+	r, w, _ := os.Pipe()
+
+	ostderr, _ := syscall.Dup(syscall.Stderr)
+	syscall.Dup2(int(w.Fd()), syscall.Stderr)
+
+	return func() string {
+		w.Close()
+		syscall.Close(syscall.Stderr)
+
+		var b bytes.Buffer
+		io.Copy(&b, r)
+		syscall.Dup2(ostderr, syscall.Stderr)
+
+		return b.String()
 	}
 }

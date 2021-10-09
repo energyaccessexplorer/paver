@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
 	"strconv"
@@ -36,9 +37,12 @@ func raster_ids(in filename, gid string, resolution int) (filename, error) {
 		"-co", "ZLEVEL=9",
 	}
 
+	release := capture()
 	dest, err := gdal.Rasterize(out, src, opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	dest.Close()
 
@@ -62,9 +66,12 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 		"-burn", "1",
 	}
 
+	release := capture()
 	out, err := gdal.RasterizeOverwrite(dest, src, opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	defer out.Close()
 
@@ -99,10 +106,16 @@ func raster_proximity(in filename) (filename, error) {
 	}
 
 	ds := drv.CreateCopy(out, src, 0, []string{}, gdal.DummyProgress, nil)
+
+	release := capture()
 	err = src.
 		RasterBand(1).
 		ComputeProximity(ds.RasterBand(1), opts, gdal.DummyProgress, nil)
 
+	result := release()
+	if err != nil {
+		return "", errors.New(result)
+	}
 	ds.Close()
 
 	return out, err
@@ -128,9 +141,12 @@ func raster_zeros(in filename, resolution int) (filename, error) {
 		"-ot", "Int16",
 	}
 
+	release := capture()
 	dest, err := gdal.Rasterize(out, src, opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	defer dest.Close()
 
@@ -178,9 +194,12 @@ func raster_crop(in filename, base filename, ref filename, conf string, res int,
 		"-r", c.Resample,
 	}
 
+	release := capture()
 	r_src, err := gdal.Warp(r_out, []gdal.Dataset{src}, r_opts)
+
+	result := release()
 	if err != nil {
-		return "", err
+		return "", errors.New(result)
 	}
 	defer r_src.Close()
 
@@ -198,9 +217,12 @@ func raster_crop(in filename, base filename, ref filename, conf string, res int,
 		"-co", "ZLEVEL=9",
 	}
 
+	release1 := capture()
 	dest, err := gdal.Warp(out, []gdal.Dataset{r_src}, c_opts)
+
+	result1 := release1()
 	if err != nil {
-		return "", err
+		return "", errors.New(result1)
 	}
 	defer dest.Close()
 
