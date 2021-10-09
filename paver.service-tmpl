@@ -4,8 +4,8 @@ Requires=nginx.service
 Requires=postgresql.service
 
 [Service]
-User=ubuntu
-WorkingDirectory=/var/www/html/paver
+User=${USER}
+WorkingDirectory=${WORKSPACE}
 ExecStartPre=rm -f ${SOCKET}
 ExecStart=${CMD}
 

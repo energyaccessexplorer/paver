@@ -1,8 +1,5 @@
 include .env
 
-CMD = paver -server -role admin -role master -role root -role leader
-SOCKET = /tmp/paver-server.sock
-
 default: clean build server
 
 build:
@@ -21,6 +18,8 @@ build:
 
 .export CMD
 .export SOCKET
+.export WORKSPACE
+.export USER
 	@envsubst <paver.service-tmpl >paver.service
 
 clean:
@@ -28,7 +27,7 @@ clean:
 
 server:
 	-@pkill -9 paver
-	@rm -rf /tmp/paver-server.sock
+	@rm -rf ${SOCKET}
 	@./${CMD}
 
 cli:
@@ -69,8 +68,6 @@ install:
 
 deploy:
 	ssh eae "sudo systemctl stop paver.service"
-	ssh eae "sudo rm -f /tmp/paver-server.sock"
-
 	ssh eae "cd ~/paver; bmake install;"
 	ssh eae "sudo systemctl daemon-reload"
 	ssh eae "sudo systemctl start paver.service"
