@@ -1,6 +1,6 @@
 include .env
 
-CMD = paver -server -role admin -role master -role root
+CMD = paver -server -role admin -role master -role root -role leader
 SOCKET = /tmp/paver-server.sock
 
 default: clean build server
