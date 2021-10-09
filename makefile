@@ -68,10 +68,11 @@ install:
 		/etc/systemd/system/
 
 deploy:
-	-ssh eae "sudo pkill -9 paver"
+	ssh eae "sudo systemctl stop paver.service"
 	ssh eae "sudo rm -f /tmp/paver-server.sock"
 
 	ssh eae "cd ~/paver; bmake install;"
-	ssh eae "${CMD}" &
+	ssh eae "sudo systemctl daemon-reload"
+	ssh eae "sudo systemctl start paver.service"
 
 all: clean build
