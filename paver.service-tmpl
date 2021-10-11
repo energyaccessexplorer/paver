@@ -4,10 +4,10 @@ Requires=nginx.service
 Requires=postgresql.service
 
 [Service]
-User=${USER}
-WorkingDirectory=${WORKSPACE}
-ExecStartPre=rm -f ${SOCKET}
-ExecStart=${CMD}
+User=${PAVER_USER}
+WorkingDirectory=${PAVER_WORKSPACE}
+ExecStartPre=rm -f ${PAVER_SOCKET}
+ExecStart=${PAVER_CMD}
 
 [Install]
 WantedBy=multi-user.target
