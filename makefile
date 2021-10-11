@@ -27,38 +27,13 @@ clean:
 
 server:
 	-@pkill -9 paver
-	@rm -rf ${SOCKET}
+	@rm -f ${SOCKET}
 	@./${CMD}
-
-cli:
-	@./paver -cli -c s3put \
-		-i ${POLYGON_SHP}
-
-	@./paver -cli -c admin_boundaries \
-		-i ${POLYGON_SHP} \
-		-g DistrictID
-
-	@./paver -cli -c vectors_routine \
-		-i ${LINES_SHP} \
-		-r ${POLYGON_GEOJSON} \
-		-g full_id
-
-	@./paver -cli -c vectors_clipped_routine \
-		-i ${POINTS_GEOJSON} \
-		-r ${POLYGON_GEOJSON} \
-		-g iso
-
-	@./paver -cli -c csv \
-		-i ${POLYGON_SHP} \
-		-s DistrictID \
-		-s Radio
-
-	@ls -lh outputs
 
 install:
 	git pull
 	bmake build
-	sudo install -o root -g ubuntu -m 755 \
+	sudo install -o root -m 755 \
 		paver paver-check \
 		/usr/local/bin/
 
