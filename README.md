@@ -17,6 +17,10 @@ To get started, edit the `.env` to your needs and run (`bmake` in Linux)
 
 	$ make
 
+**Important**: when compiling the executable the S3 credentials and the JWT key
+are burnt into the binary file. Do **NOT** expect them to be obscured - compile
+and deploy to trustworthy locations, ok?
+
 
 ## License
 
