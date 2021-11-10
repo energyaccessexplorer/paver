@@ -2,16 +2,9 @@ package main
 
 import (
 	"fmt"
-	"net/http"
 )
 
-type reporter func(string, ...interface{})
-
-func routine_admin_boundaries(r *http.Request, in filename, idfield string, resolution int) (string, error) {
-	w := func(s string, x ...interface{}) {
-		socketwrite(fmt.Sprintf(s+"\n", x...), r)
-	}
-
+func routine_admin_boundaries(w reporter, in filename, idfield string, resolution int) (string, error) {
 	rprj, err := vectors_reproject(in, 3857)
 	if err != nil {
 		return "", err
@@ -64,11 +57,7 @@ func routine_admin_boundaries(r *http.Request, in filename, idfield string, reso
 	return jsonstr, nil
 }
 
-func routine_clip_proximity(r *http.Request, in filename, ref filename, fields []string, resolution int) (string, error) {
-	w := func(s string, x ...interface{}) {
-		socketwrite(fmt.Sprintf(s+"\n", x...), r)
-	}
-
+func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
 	stripped, err := vectors_strip(in, fields)
 	if err != nil {
 		return "", err
@@ -125,11 +114,7 @@ func routine_clip_proximity(r *http.Request, in filename, ref filename, fields [
 	return jsonstr, nil
 }
 
-func routine_crop_raster(r *http.Request, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
-	w := func(s string, x ...interface{}) {
-		socketwrite(fmt.Sprintf(s+"\n", x...), r)
-	}
-
+func routine_crop_raster(w reporter, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
 	cropped, err := raster_crop(in, base, ref, conf, resolution, w)
 	if err != nil {
 		return "", err

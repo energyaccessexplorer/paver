@@ -14,6 +14,14 @@ var (
 	socket *websocket.Conn
 )
 
+type reporter func(string, ...interface{})
+
+func sw(r *http.Request) reporter {
+	return func(s string, x ...interface{}) {
+		socketwrite(fmt.Sprintf(s+"\n", x...), r)
+	}
+}
+
 type server_routine func(*http.Request) (string, error)
 
 var server_routines = map[string]server_routine{
@@ -107,7 +115,7 @@ func server_admin_boundaries(r *http.Request) (string, error) {
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
 	jsonstr, err := routine_admin_boundaries(
-		r,
+		sw(r),
 		inputfile,
 		string(f["field"]),
 		res,
@@ -146,7 +154,7 @@ func server_clip_proximity(r *http.Request) (string, error) {
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
 	jsonstr, err := routine_clip_proximity(
-		r,
+		sw(r),
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
@@ -194,7 +202,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 	configjson := string(f["config"])
 
 	jsonstr, err := routine_crop_raster(
-		r,
+		sw(r),
 		inputfile,
 		basefile,
 		referencefile,
