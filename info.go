@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
 	"log"
@@ -19,13 +18,6 @@ type dataset_info struct {
 	Fields       []string `json:"fields"`
 	FeatureCount int      `json:"featurecount"`
 	Bounds       bounds   `json:"bounds"`
-}
-
-func info_featurecount(in filename) int {
-	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
-	cs, _ := src.FeatureCount(true)
-
-	return cs
 }
 
 func info_bounds(in filename) gdal.Geometry {
@@ -81,42 +73,4 @@ func info_bounds(in filename) gdal.Geometry {
 	}
 
 	return g
-}
-
-func info_fields(in filename) []string {
-	fdef := gdal.
-		OpenDataSource(in, 0).
-		LayerByIndex(0).
-		Definition()
-
-	c := fdef.FieldCount()
-	a := make([]string, c)
-
-	for i := 0; i < c; i++ {
-		a[i] = fdef.FieldDefinition(i).Name()
-	}
-
-	return a
-}
-
-func info(in filename) string {
-	b := info_bounds(in)
-	if b.Type() == gdal.GT_None {
-		return "Info bounds returned a garbage geometry"
-	}
-
-	e := b.Envelope()
-
-	i := dataset_info{
-		info_fields(in),
-		info_featurecount(in),
-		bounds{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
-	}
-
-	j, err := json.Marshal(i)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	return string(j)
 }

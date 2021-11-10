@@ -43,9 +43,9 @@ func cli() {
 			fmt.Println("bounds:", info_bounds(inputfile).ToJSON())
 		}
 
-	case "info":
+	case "vectors-info":
 		{
-			fmt.Println("info:", info(inputfile))
+			fmt.Println("info:", vectors_info(inputfile))
 		}
 
 	case "zeros":

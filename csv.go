@@ -18,7 +18,7 @@ func csv(in filename, fields []string) (filename, error) {
 	cols := strings.Join(fields, ",")
 	sql := fmt.Sprintf("SELECT %s FROM \"%s\"", cols, layer)
 
-	fis := info_fields(in)
+	fis := vectors_fields(in)
 
 	for _, a := range fields {
 		for _, fi := range fis {

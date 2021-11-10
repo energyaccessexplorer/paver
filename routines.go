@@ -29,7 +29,7 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 	}
 	w("%s <- *stripped reprojected", rprjstripped)
 
-	info := info(rprjstripped)
+	info := vectors_info(rprjstripped)
 
 	w("CLEAN UP")
 
