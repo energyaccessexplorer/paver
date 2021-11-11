@@ -28,6 +28,7 @@ var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
 	"clip-proximity":   server_clip_proximity,
 	"crop-raster":      server_crop_raster,
+	"subgeographies":   server_subgeographies,
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +214,33 @@ func server_crop_raster(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	return jsonstr, nil
+}
+
+func server_subgeographies(r *http.Request) (string, error) {
+	f := formdata{
+		"dataseturl": nil,
+		"idcolumn":   nil,
+	}
+
+	err := form_parse(&f, r)
+	if err != nil {
+		return "", err
+	}
+
+	dataseturl, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return "", err
+	}
+
+	idcolumn := string(f["idcolumn"])
+
+	jsonstr, err := routine_subgeographies(
+		sw(r),
+		dataseturl,
+		idcolumn,
+	)
 
 	return jsonstr, nil
 }

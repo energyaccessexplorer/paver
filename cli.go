@@ -48,6 +48,11 @@ func cli() {
 			fmt.Println("info:", vectors_info(inputfile))
 		}
 
+	case "subgeographies":
+		{
+			fmt.Println(routine_subgeographies(p, inputfile, idfield))
+		}
+
 	case "zeros":
 		{
 			out, _ := raster_zeros(inputfile, 1000)

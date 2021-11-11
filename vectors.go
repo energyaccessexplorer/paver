@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+type intstringdict map[int64]string
+
 func vectors_strip(in filename, fields []string) (filename, error) {
 	out := _filename()
 
@@ -106,6 +108,43 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	w("	result feature count: %d", rt)
 
 	return out, err
+}
+
+func vectors_features_split(in filename, id string, w reporter) (intstringdict, error) {
+	w("VECTORS FEATURES")
+
+	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+
+	drv := gdal.OGRDriverByName("GeoJSON")
+	s := gdal.CreateSpatialReference("")
+	s.FromEPSG(4326)
+
+	results := make(intstringdict)
+
+	for i := 0; i < vectors_featurecount(in); i++ {
+		f := src.Feature(int64(i))
+		x := f.FieldIndex(id)
+		y := f.FieldAsInteger64(x)
+
+		if x < 0 {
+			w("YEAH, NAH...")
+			return nil, errors.New("-1")
+		}
+
+		out := _filename()
+		ds, _ := drv.Create(out, []string{})
+
+		layer := ds.CreateLayer("Layer0", s, src.Type(), []string{})
+		layer.Create(f)
+
+		ds.Destroy()
+
+		results[y] = out
+
+		w("%d: %s", y, out)
+	}
+
+	return results, nil
 }
 
 func vectors_featurecount(in filename) int {

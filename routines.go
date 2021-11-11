@@ -151,3 +151,25 @@ func routine_crop_raster(w reporter, in filename, base filename, ref filename, c
 
 	return jsonstr, nil
 }
+
+func routine_subgeographies(w reporter, in filename, id string) (string, error) {
+	r, _ := vectors_features_split(in, id, w)
+
+	w("CLEAN UP")
+
+	if run_server {
+		for i, f := range r {
+			r[i] = _uuid(r[i])
+
+			w("%s -> S3", f)
+			s3put(f)
+			trash(f)
+		}
+	}
+
+	w("DONE")
+
+	jsonstr, _ := json.Marshal(r)
+
+	return string(jsonstr), nil
+}
