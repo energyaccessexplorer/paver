@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 )
 
@@ -47,11 +48,16 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 
 	w("DONE")
 
+	jinfo, err := json.Marshal(info)
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	jsonstr := fmt.Sprintf(
 		`{ "vectors": "%s", "raster": "%s", "info": %s }`,
 		_uuid(rprjstripped),
 		_uuid(ids),
-		info,
+		jinfo,
 	)
 
 	return jsonstr, nil
@@ -115,7 +121,13 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 }
 
 func routine_crop_raster(w reporter, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
-	cropped, err := raster_crop(in, base, ref, conf, resolution, w)
+	var c raster_config
+	err := json.Unmarshal([]byte(conf), &c)
+	if err != nil {
+		return "", err
+	}
+
+	cropped, err := raster_crop(in, base, ref, c, resolution, w)
 	if err != nil {
 		return "", err
 	}

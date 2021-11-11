@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
@@ -116,26 +115,19 @@ func vectors_featurecount(in filename) int {
 	return cs
 }
 
-func vectors_info(in filename) string {
+func vectors_info(in filename) dataset_info {
 	b := info_bounds(in)
 	if b.Type() == gdal.GT_None {
-		return "Info bounds returned a garbage geometry"
+		return dataset_info{}
 	}
 
 	e := b.Envelope()
 
-	i := dataset_info{
+	return dataset_info{
 		vectors_fields(in),
 		vectors_featurecount(in),
 		bounds{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
 	}
-
-	j, err := json.Marshal(i)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	return string(j)
 }
 
 func vectors_fields(in filename) []string {

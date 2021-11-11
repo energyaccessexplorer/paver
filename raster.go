@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
@@ -153,11 +152,8 @@ func raster_zeros(in filename, resolution int) (filename, error) {
 	return out, err
 }
 
-func raster_crop(in filename, base filename, ref filename, conf string, res int, w reporter) (filename, error) {
+func raster_crop(in filename, base filename, ref filename, c raster_config, res int, w reporter) (filename, error) {
 	w("RASTER CROP")
-
-	var c raster_config
-	err := json.Unmarshal([]byte(conf), &c)
 
 	r, err := gdal.OpenEx(base, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
