@@ -20,6 +20,11 @@ var UUID_REGEXP = regexp.MustCompile("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-
 
 type filename = string
 
+type userclaims struct {
+	Role  string `json:"role"`
+	Email string `json:"email"`
+}
+
 func main() {
 	parse_flags()
 
@@ -51,6 +56,7 @@ func parse_flags() {
 	// SERVER flags
 	//
 	flag.Var(&roles, "role", "Roles permitted in the JWT claims")
+	flag.StringVar(&pubkeyfile, "pubkey", "", "Public key file to check JWTs")
 
 	flag.Parse()
 }

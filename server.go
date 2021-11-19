@@ -2,9 +2,12 @@ package main
 
 import (
 	"bytes"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v4"
+	"github.com/cristalhq/jwt/v4"
 	"io"
 	"io/ioutil"
 	"log"
@@ -17,9 +20,11 @@ import (
 )
 
 var (
-	jwtkey string
-	roles  arrayFlag
-	tmpdir string
+	pubkeyfile string
+	pubkey     *rsa.PublicKey
+	verifier   *jwt.RSAlg
+	roles      arrayFlag
+	tmpdir     string
 )
 
 type handler func(w http.ResponseWriter, r *http.Request)
@@ -31,7 +36,7 @@ func serve() {
 
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 
-	fmt.Printf("JWT key is: %s\n", jwtkey)
+	fmt.Printf("Public key is: %s\n", pubkeyfile)
 	fmt.Printf("Roles claim is: %s\n", roles)
 
 	mux := http.NewServeMux()
@@ -61,9 +66,47 @@ func check_server_flags() {
 	}
 	t.Close()
 
-	if len(jwtkey) < 32 {
-		log.Fatal(errors.New("I won't start without a (proper) secret-key!"))
+	content, err := ioutil.ReadFile(pubkeyfile)
+	if err != nil {
+		log.Fatal(err.Error())
 	}
+
+	pubkey = parsekey(content)
+
+	verifier, err = jwt.NewVerifierRS(jwt.RS256, pubkey)
+	if err != nil {
+		log.Fatal(errors.New("No verifier"))
+	}
+}
+
+func parsekey(s []byte) *rsa.PublicKey {
+	block, _ := pem.Decode(s)
+	if block == nil {
+		panic("Could not decode PEM bytes")
+	}
+
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		panic(err)
+	}
+
+	return key.(*rsa.PublicKey)
+}
+
+func verifytoken(token *jwt.Token, pubkey *rsa.PublicKey) (ok bool, err error) {
+	ok = false
+
+	verifier, err := jwt.NewVerifierRS(jwt.RS256, pubkey)
+	if err != nil {
+		return ok, err
+	}
+
+	err = verifier.Verify(token)
+	if err == nil {
+		ok = true
+	}
+
+	return ok, err
 }
 
 func jwt_check(fn handler) handler {
@@ -75,40 +118,31 @@ func jwt_check(fn handler) handler {
 			return
 		}
 
-		tokenString := strings.TrimPrefix(auth_header, "Bearer ")
+		ts := strings.TrimPrefix(auth_header, "Bearer ")
 
-		token, err := jwt.Parse(
-			tokenString,
-			func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-				}
+		t, err := jwt.Parse([]byte(ts), verifier)
 
-				return []byte(jwtkey), nil
-			})
-
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
+		ok, err := verifytoken(t, pubkey)
+		if !ok {
+			http.Error(w, "Shoo!", http.StatusForbidden)
 		}
 
-		if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
+		var c userclaims
+
+		err = jwt.ParseClaims([]byte(ts), verifier, &c)
+
+		if err == nil {
 			for _, ro := range roles {
-				if ro == claims["role"] {
+				if ro == c.Role {
 					fn(w, r)
 					return
 				}
 			}
-
-			http.Error(w, "Who do think you are?", http.StatusUnauthorized)
-
-		} else {
-			fmt.Println("Naughty: ", claims["email"])
-
-			w.WriteHeader(401)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
 		}
+
+		http.Error(w, "Could not get role", http.StatusUnauthorized)
+
+		return
 	}
 }
 

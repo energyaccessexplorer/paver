@@ -7,7 +7,6 @@ build:
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
 	go build -ldflags "-s \
-		-X main.jwtkey=${PAVER_JWTKEY} \
 		-X main.tmpdir=${PAVER_TMPDIR} \
 		-X main.S3KEY=${PAVER_S3KEY} \
 		-X main.S3SECRET=${PAVER_S3SECRET} \
