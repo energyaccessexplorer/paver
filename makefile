@@ -33,7 +33,7 @@ install:
 	git pull
 	bmake build
 	sudo install -o root -m 755 \
-		paver paver-check \
+		paver \
 		/usr/local/bin/
 
 	sudo install -o root -g root -m 644 \
