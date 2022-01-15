@@ -98,7 +98,7 @@ func raster_proximity(in filename) (filename, error) {
 		"DISTUNITS=PIXEL",
 		"VALUES=1",
 		"USE_INPUT_NODATA=YES",
-		fmt.Sprintf("MAXDIST=%d", 512),
+		fmt.Sprintf("MAXDIST=%d", 1024),
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
