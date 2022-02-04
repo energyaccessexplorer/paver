@@ -121,7 +121,7 @@ func vectors_features_split(in filename, id string, w reporter) (intstringdict, 
 
 	results := make(intstringdict)
 
-	for i := 0; i < vectors_featurecount(in); i++ {
+	for i := 0; i < vectors_feature_count(in); i++ {
 		f := src.Feature(int64(i))
 		x := f.FieldIndex(id)
 		y := f.FieldAsInteger64(x)
@@ -147,7 +147,7 @@ func vectors_features_split(in filename, id string, w reporter) (intstringdict, 
 	return results, nil
 }
 
-func vectors_featurecount(in filename) int {
+func vectors_feature_count(in filename) int {
 	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
 	cs, _ := src.FeatureCount(true)
 
@@ -164,7 +164,7 @@ func vectors_info(in filename) dataset_info {
 
 	return dataset_info{
 		vectors_fields(in),
-		vectors_featurecount(in),
+		vectors_feature_count(in),
 		bounds{e.MinX(), e.MinY(), e.MaxX(), e.MaxY()},
 	}
 }
