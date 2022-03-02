@@ -10,19 +10,15 @@ import (
 	"time"
 )
 
-var (
-	socket *websocket.Conn
-)
-
 type reporter func(string, ...interface{})
 
-func sw(r *http.Request) reporter {
+func sw(r *http.Request, k *websocket.Conn) reporter {
 	return func(s string, x ...interface{}) {
-		socketwrite(fmt.Sprintf(s+"\n", x...), r)
+		socket_write(k, fmt.Sprintf(s+"\n", x...), r)
 	}
 }
 
-type server_routine func(*http.Request) (string, error)
+type server_routine func(*http.Request, *websocket.Conn) (string, error)
 
 var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
@@ -30,6 +26,8 @@ var server_routines = map[string]server_routine{
 	"crop-raster":      server_crop_raster,
 	"subgeographies":   server_subgeographies,
 }
+
+var socket_table = map[string]*websocket.Conn{}
 
 func _routines(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -49,7 +47,8 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			io.WriteString(w, "don't know what you mean by: "+q)
 		} else {
-			jsonstr, err := rtn(r)
+			sid := r.URL.Query().Get("socket_id")
+			jsonstr, err := rtn(r, socket_table[sid])
 
 			if err == nil {
 				io.WriteString(w, jsonstr)
@@ -64,15 +63,23 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func _socket(w http.ResponseWriter, r *http.Request) {
-	var err error
+func socket_destroy(id string, s *websocket.Conn) {
+	s.Close(websocket.StatusNormalClosure, "done!")
+	delete(socket_table, id)
+	fmt.Println("destroy:?", len(socket_table))
+}
 
-	socket, err = websocket.Accept(w, r, nil)
+func _socket(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+
+	socket, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
 	}
-	defer socket.Close(websocket.StatusNormalClosure, "done!")
+	defer socket_destroy(id, socket)
+
+	socket_table[id] = socket
 
 	count := 0
 	for {
@@ -96,11 +103,11 @@ func _check(w http.ResponseWriter, r *http.Request) {
 
 func server_endpoints(mux *http.ServeMux) {
 	mux.HandleFunc("/check", _check)
-	mux.HandleFunc("/socket", _socket) // TODO: authenticate socket connections
+	mux.HandleFunc("/socket", _socket)
 	mux.HandleFunc("/routines", jwt_check(_routines))
 }
 
-func server_admin_boundaries(r *http.Request) (string, error) {
+func server_admin_boundaries(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl": nil,
 		"field":      nil,
@@ -116,7 +123,7 @@ func server_admin_boundaries(r *http.Request) (string, error) {
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
 	jsonstr, err := routine_admin_boundaries(
-		sw(r),
+		sw(r, s),
 		inputfile,
 		string(f["field"]),
 		res,
@@ -129,7 +136,7 @@ func server_admin_boundaries(r *http.Request) (string, error) {
 	return jsonstr, nil
 }
 
-func server_clip_proximity(r *http.Request) (string, error) {
+func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl":   nil,
 		"referenceurl": nil,
@@ -155,7 +162,7 @@ func server_clip_proximity(r *http.Request) (string, error) {
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
 	jsonstr, err := routine_clip_proximity(
-		sw(r),
+		sw(r, s),
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
@@ -169,7 +176,7 @@ func server_clip_proximity(r *http.Request) (string, error) {
 	return jsonstr, nil
 }
 
-func server_crop_raster(r *http.Request) (string, error) {
+func server_crop_raster(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl":   nil,
 		"baseurl":      nil,
@@ -203,7 +210,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 	configjson := string(f["config"])
 
 	jsonstr, err := routine_crop_raster(
-		sw(r),
+		sw(r, s),
 		inputfile,
 		basefile,
 		referencefile,
@@ -218,7 +225,7 @@ func server_crop_raster(r *http.Request) (string, error) {
 	return jsonstr, nil
 }
 
-func server_subgeographies(r *http.Request) (string, error) {
+func server_subgeographies(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl": nil,
 		"idcolumn":   nil,
@@ -237,7 +244,7 @@ func server_subgeographies(r *http.Request) (string, error) {
 	idcolumn := string(f["idcolumn"])
 
 	jsonstr, err := routine_subgeographies(
-		sw(r),
+		sw(r, s),
 		dataseturl,
 		idcolumn,
 	)
