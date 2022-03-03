@@ -7,7 +7,6 @@ import (
 	"nhooyr.io/websocket"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type reporter func(string, ...interface{})
@@ -26,8 +25,6 @@ var server_routines = map[string]server_routine{
 	"crop-raster":      server_crop_raster,
 	"subgeographies":   server_subgeographies,
 }
-
-var socket_table = map[string]*websocket.Conn{}
 
 func _routines(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -63,33 +60,9 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func socket_destroy(id string, s *websocket.Conn) {
-	s.Close(websocket.StatusNormalClosure, "done!")
-	delete(socket_table, id)
-	fmt.Println("destroy:?", len(socket_table))
-}
-
 func _socket(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-
-	socket, err := websocket.Accept(w, r, nil)
-	if err != nil {
-		fmt.Printf("%v\n", err)
-		return
-	}
-	defer socket_destroy(id, socket)
-
-	socket_table[id] = socket
-
-	count := 0
-	for {
-		time.Sleep(10 * time.Second)
-		if count > 9 {
-			break
-		}
-
-		count += 1
-	}
+	socket_create(id, w, r)
 }
 
 func _check(w http.ResponseWriter, r *http.Request) {

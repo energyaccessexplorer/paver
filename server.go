@@ -13,7 +13,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"nhooyr.io/websocket"
 	"os"
 	"strconv"
 	"strings"
@@ -238,14 +237,4 @@ func form_parse(form *formdata, r *http.Request) (err error) {
 	}
 
 	return err
-}
-
-func socket_write(s *websocket.Conn, m string, r *http.Request) {
-	if r == nil {
-		fmt.Println(m)
-		return
-	}
-
-	ctx := r.Context()
-	s.Write(ctx, websocket.MessageText, []byte(m))
 }
