@@ -1,12 +1,16 @@
 module git.carajo.no/paver
 
-go 1.16
+go 1.17
 
 require (
 	github.com/cristalhq/jwt/v4 v4.0.0-beta
 	github.com/energyaccessexplorer/gdal v0.0.0-20210715072538-316a99a04692
-	github.com/kr/text v0.2.0 // indirect
 	github.com/satori/go.uuid v1.2.0
-	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	nhooyr.io/websocket v1.8.6
+)
+
+require (
+	github.com/klauspost/compress v1.10.3 // indirect
+	github.com/kr/text v0.2.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
