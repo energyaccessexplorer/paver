@@ -45,7 +45,9 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, "don't know what you mean by: "+q)
 		} else {
 			sid := r.URL.Query().Get("socket_id")
-			jsonstr, err := rtn(r, socket_table[sid])
+			s := socket_table[sid]
+
+			jsonstr, err := rtn(r, s)
 
 			if err == nil {
 				io.WriteString(w, jsonstr)
@@ -53,6 +55,8 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				io.WriteString(w, err.Error())
 			}
+
+			defer socket_destroy(sid, s, "routine finished")
 		}
 
 	default:
