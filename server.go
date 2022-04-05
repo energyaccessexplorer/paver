@@ -26,12 +26,18 @@ var (
 	tmpdir     string
 )
 
+var socket = "/tmp/paver-server.sock"
+
 type handler func(w http.ResponseWriter, r *http.Request)
 
 type formdata map[string][]byte
 
 func serve() {
 	check_server_flags()
+
+	if !socket_check() {
+		return
+	}
 
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 
@@ -41,7 +47,9 @@ func serve() {
 	mux := http.NewServeMux()
 	server_endpoints(mux)
 
-	l, err := net.Listen("unix", "/tmp/paver-server.sock")
+	l, err := net.Listen("unix", socket)
+	defer os.Remove(socket)
+
 	if err != nil {
 		panic(err)
 	}
@@ -76,6 +84,23 @@ func check_server_flags() {
 	if err != nil {
 		log.Fatal(errors.New("No verifier"))
 	}
+}
+
+func socket_check() bool {
+	if _, err := os.Stat(socket); os.IsNotExist(err) {
+		return true
+	}
+
+	if conn, err := net.Dial("unix", socket); err == nil {
+		defer conn.Close()
+		fmt.Println("An instance of paver is already running!")
+		return false
+	}
+
+	fmt.Println("Removing stale socket")
+	os.Remove(socket)
+
+	return true
 }
 
 func parsekey(s []byte) *rsa.PublicKey {

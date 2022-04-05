@@ -1,6 +1,6 @@
 include .env
 
-default: clean build server
+default: clean build
 
 build:
 	go fmt
@@ -26,8 +26,7 @@ clean:
 
 server:
 	-@pkill -9 paver
-	@rm -f ${PAVER_SOCKET}
-	@./${PAVER_CMD}
+	./${PAVER_CMD}
 
 install:
 	git pull
