@@ -60,15 +60,27 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 		return "", err
 	}
 
+	layer := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+
 	opts := []string{
-		"-l", gdal.OpenDataSource(in, 0).LayerByIndex(0).Name(),
+		"-l", layer.Name(),
 		"-burn", "1",
+	}
+
+	c, ok := layer.FeatureCount(false)
+	if !ok {
+		return "", errors.New("Could not get feature count")
+	}
+
+	if c == 0 {
+		return "", errors.New("Feature count is ZERO")
 	}
 
 	release := capture()
 	out, err := gdal.RasterizeOverwrite(dest, src, opts)
 
 	result := release()
+
 	if err != nil {
 		return "", errors.New(result)
 	}
