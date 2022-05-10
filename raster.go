@@ -53,13 +53,11 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 	if err != nil {
 		return "", err
 	}
-	defer src.Close()
 
 	dest, err := gdal.OpenEx(dst, gdal.OFUpdate, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
-	defer dest.Close()
 
 	f := gdal.OpenDataSource(in, 0)
 	defer f.Destroy()
@@ -89,6 +87,10 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 		return "", errors.New(result)
 	}
 	defer out.Close()
+
+	// WHY?!
+	// dest.Close()
+	// src.Close()
 
 	return dst, err
 }
