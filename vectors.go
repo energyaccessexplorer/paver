@@ -52,12 +52,12 @@ func vectors_reproject(in filename, epsg int) (filename, error) {
 
 	release := capture()
 	dst, err := gdal.VectorTranslate(out+".geojson", []gdal.Dataset{src}, opts)
+	defer dst.Close()
 
 	result := release()
 	if err != nil {
 		return "", errors.New(result)
 	}
-	dst.Close()
 
 	os.Rename(out+".geojson", out)
 
@@ -69,8 +69,13 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 
 	out := _filename()
 
-	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
-	tar := gdal.OpenDataSource(container, 0).LayerByIndex(0)
+	f := gdal.OpenDataSource(in, 0)
+	g := gdal.OpenDataSource(container, 0)
+	defer f.Destroy()
+	defer g.Destroy()
+
+	src := f.LayerByIndex(0)
+	tar := g.LayerByIndex(0)
 
 	tt, _ := src.FeatureCount(true)
 	w("	source feature count: %d", tt)
@@ -102,7 +107,10 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 
 	ds.Destroy()
 
-	l := gdal.OpenDataSource(out, 0).LayerByIndex(0)
+	h := gdal.OpenDataSource(out, 0)
+	defer h.Destroy()
+
+	l := h.LayerByIndex(0)
 
 	rt, _ := l.FeatureCount(true)
 	w("	result feature count: %d", rt)
@@ -113,7 +121,9 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 func vectors_features_split(in filename, id string, w reporter) (intstringdict, error) {
 	w("VECTORS FEATURES")
 
-	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	f := gdal.OpenDataSource(in, 0)
+	src := f.LayerByIndex(0)
+	defer f.Destroy()
 
 	drv := gdal.OGRDriverByName("GeoJSON")
 	s := gdal.CreateSpatialReference("")
@@ -148,7 +158,10 @@ func vectors_features_split(in filename, id string, w reporter) (intstringdict, 
 }
 
 func vectors_feature_count(in filename) int {
-	src := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	f := gdal.OpenDataSource(in, 0)
+	defer f.Destroy()
+
+	src := f.LayerByIndex(0)
 	cs, _ := src.FeatureCount(true)
 
 	return cs
@@ -170,8 +183,10 @@ func vectors_info(in filename) dataset_info {
 }
 
 func vectors_fields(in filename) []string {
-	fdef := gdal.
-		OpenDataSource(in, 0).
+	f := gdal.OpenDataSource(in, 0)
+	defer f.Destroy()
+
+	fdef := f.
 		LayerByIndex(0).
 		Definition()
 

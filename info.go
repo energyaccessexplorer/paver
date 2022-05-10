@@ -27,6 +27,7 @@ func info_bounds(in filename) gdal.Geometry {
 	t.FromEPSG(4326)
 
 	src := gdal.OpenDataSource(in, 0)
+	defer src.Destroy()
 
 	layer := src.LayerByIndex(0)
 

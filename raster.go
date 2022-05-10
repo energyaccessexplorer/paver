@@ -60,7 +60,10 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 		return "", err
 	}
 
-	layer := gdal.OpenDataSource(in, 0).LayerByIndex(0)
+	f := gdal.OpenDataSource(in, 0)
+	defer f.Destroy()
+
+	layer := f.LayerByIndex(0)
 
 	opts := []string{
 		"-l", layer.Name(),
@@ -86,7 +89,7 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 	}
 	defer out.Close()
 
-	// TODO: dest.Close() segfaults... defer o no defer below, no comprende
+	dest.Close()
 
 	return dst, err
 }
@@ -96,6 +99,7 @@ func raster_proximity(in filename) (filename, error) {
 	if err != nil {
 		return "", err
 	}
+	defer src.Close()
 
 	drv, err := gdal.GetDriverByName("GTiff")
 	if err != nil {
@@ -181,7 +185,10 @@ func raster_crop(in filename, base filename, ref filename, c raster_config, res 
 
 	out := _filename()
 
-	layer := gdal.OpenDataSource(ref, 0).LayerByIndex(0).Name()
+	f := gdal.OpenDataSource(ref, 0)
+	defer f.Destroy()
+
+	layer := f.LayerByIndex(0).Name()
 	w(" cropping to first layer: %s", layer)
 
 	x := r.RasterXSize()
