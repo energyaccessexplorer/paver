@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/cristalhq/jwt/v4 v4.0.0-beta
-	github.com/energyaccessexplorer/gdal v0.0.0-20210715072538-316a99a04692
+	github.com/energyaccessexplorer/gdal v0.0.0-20220511141005-3759e3c812d5
 	github.com/satori/go.uuid v1.2.0
 	nhooyr.io/websocket v1.8.6
 )

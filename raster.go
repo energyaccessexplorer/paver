@@ -48,13 +48,13 @@ func raster_ids(in filename, gid string, resolution int) (filename, error) {
 	return out, err
 }
 
-func raster_geometry(in filename, dst filename) (filename, error) {
+func raster_geometry(in filename, zs filename) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
 
-	dest, err := gdal.OpenEx(dst, gdal.OFUpdate, nil, nil, nil)
+	zeros, err := gdal.OpenEx(zs, gdal.OFUpdate, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
@@ -79,20 +79,17 @@ func raster_geometry(in filename, dst filename) (filename, error) {
 	}
 
 	release := capture()
-	out, err := gdal.RasterizeOverwrite(dest, src, opts)
+	_, err = gdal.RasterizeOverwrite(zeros, src, opts)
 
 	result := release()
-
 	if err != nil {
 		return "", errors.New(result)
 	}
-	defer out.Close()
 
-	// WHY?!
-	// dest.Close()
-	// src.Close()
+	zeros.Close()
+	src.Close()
 
-	return dst, err
+	return zs, err
 }
 
 func raster_proximity(in filename) (filename, error) {
