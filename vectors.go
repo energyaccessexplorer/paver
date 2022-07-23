@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -41,6 +40,7 @@ func vectors_reproject(in filename, epsg int) (filename, error) {
 	out := _filename()
 
 	opts := []string{
+		"-f", "GeoJSON",
 		"-t_srs", "EPSG:" + strconv.Itoa(epsg),
 	}
 
@@ -51,15 +51,13 @@ func vectors_reproject(in filename, epsg int) (filename, error) {
 	defer src.Close()
 
 	release := capture()
-	dst, err := gdal.VectorTranslate(out+".geojson", []gdal.Dataset{src}, opts)
+	dst, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
 	defer dst.Close()
 
 	result := release()
 	if err != nil {
 		return "", errors.New(result)
 	}
-
-	os.Rename(out+".geojson", out)
 
 	return out, nil
 }

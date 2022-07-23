@@ -121,7 +121,7 @@ func cli() {
 
 			out, _ := csv(inputfile, selectfields)
 
-			println("cvs output:", out)
+			println("csv output:", out)
 		}
 
 	case "admin_boundaries":
