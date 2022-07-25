@@ -131,6 +131,9 @@ func csv_points(in filename, lnglat [2]string, sel []string) (filename, error) {
 
 	sel = append(sel, "null")
 
+	os.Rename(in, in+".csv")
+	in = in + ".csv"
+
 	openopts := []string{
 		fmt.Sprintf("X_POSSIBLE_NAMES=%s", lnglat[0]),
 		fmt.Sprintf("Y_POSSIBLE_NAMES=%s", lnglat[1]),
