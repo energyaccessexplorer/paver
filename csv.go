@@ -7,6 +7,7 @@ import (
 	"github.com/energyaccessexplorer/gdal"
 	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 )
@@ -123,4 +124,42 @@ func csv(in filename, fields []string) (filename, error) {
 	file.Sync()
 
 	return fname, nil
+}
+
+func csv_points(in filename, lnglat [2]string, sel []string) (filename, error) {
+	out := _filename()
+
+	sel = append(sel, "null")
+
+	openopts := []string{
+		fmt.Sprintf("X_POSSIBLE_NAMES=%s", lnglat[0]),
+		fmt.Sprintf("Y_POSSIBLE_NAMES=%s", lnglat[1]),
+		"KEEP_GEOM_COLUMNS=YES",
+	}
+
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, openopts, nil)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	opts := []string{
+		"-f", "GeoJSON",
+		"-sql", fmt.Sprintf(
+			"SELECT %s FROM \"%s\"",
+			strings.Join(sel, ","),
+			strings.Replace(path.Base(in), path.Ext(in), "", -1),
+		),
+	}
+
+	release := capture()
+	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+
+	result := release()
+	if err != nil {
+		return "", errors.New(result)
+	}
+	defer dest.Close()
+
+	return out, nil
 }

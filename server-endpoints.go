@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,7 @@ type server_routine func(*http.Request, *websocket.Conn) (string, error)
 var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
 	"clip-proximity":   server_clip_proximity,
+	"csv-points":       server_csv_points,
 	"crop-raster":      server_crop_raster,
 	"subgeographies":   server_subgeographies,
 }
@@ -142,6 +144,53 @@ func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 		sw(r, s),
 		inputfile,
 		referencefile,
+		strings.Split(string(f["fields"]), ","),
+		res,
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return jsonstr, nil
+}
+
+func server_csv_points(r *http.Request, s *websocket.Conn) (string, error) {
+	f := formdata{
+		"dataseturl":   nil,
+		"referenceurl": nil,
+		"fields":       nil,
+		"lnglat":       nil,
+		"resolution":   nil,
+	}
+
+	err := form_parse(&f, r)
+	if err != nil {
+		return "", err
+	}
+
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return "", err
+	}
+
+	referencefile, err := snatch(string(f["referenceurl"]))
+	if err != nil {
+		return "", err
+	}
+
+	res, _ := strconv.Atoi(string(f["resolution"]))
+	ll := strings.Split(string(f["lnglat"]), ",")
+
+	if len(ll) != 2 {
+		return "", errors.New("Argument Error: lnglat length should be 2")
+	}
+
+	jsonstr, err := routine_csv_points(
+		sw(r, s),
+		inputfile,
+		referencefile,
+		[2]string{ll[0], ll[1]},
 		strings.Split(string(f["fields"]), ","),
 		res,
 	)

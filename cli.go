@@ -124,6 +124,17 @@ func cli() {
 			println("csv output:", out)
 		}
 
+	case "csvpoints":
+		{
+			if len(selectfields) == 0 {
+				println("No -s (select fields) given.")
+			}
+
+			out, _ := csv_points(inputfile, [2]string{"Longitude", "Latitude"}, selectfields)
+
+			println("csv output:", out)
+		}
+
 	case "admin_boundaries":
 		{
 			routine_admin_boundaries(nil, inputfile, idfield, 1000)

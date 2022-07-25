@@ -120,6 +120,63 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 	return jsonstr, nil
 }
 
+func routine_csv_points(w reporter, in filename, ref filename, lnglat [2]string, fields []string, resolution int) (string, error) {
+	points, err := csv_points(in, lnglat, fields)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- csv points", points)
+
+	refprj, err := vectors_reproject(ref, 3857)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- reprojected reference", refprj)
+
+	zeros, err := raster_zeros(refprj, resolution)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- zeros", zeros)
+
+	clipped, err := vectors_clip(points, ref, w)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- *clipped", clipped)
+
+	rstr, err := raster_geometry(clipped, zeros)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- rasterised <- zeros", rstr) // overwrites zeros
+
+	prox, err := raster_proximity(rstr)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- *proximity", prox)
+
+	w("CLEAN UP")
+	trash(in, ref, points, rstr, refprj)
+
+	if run_server {
+		keeps := []filename{clipped, prox}
+
+		for _, f := range keeps {
+			w("%s -> S3", f)
+			s3put(f)
+			trash(f)
+		}
+	}
+
+	w("DONE")
+
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(clipped), _uuid(prox))
+
+	return jsonstr, nil
+}
+
 func routine_crop_raster(w reporter, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
 	var c raster_config
 	err := json.Unmarshal([]byte(conf), &c)
