@@ -129,7 +129,9 @@ func csv(in filename, fields []string) (filename, error) {
 func csv_points(in filename, lnglat [2]string, sel []string) (filename, error) {
 	out := _filename()
 
-	sel = append(sel, "null")
+	if len(sel) == 0 {
+		sel = []string{"null"}
+	}
 
 	os.Rename(in, in+".csv")
 	in = in + ".csv"
