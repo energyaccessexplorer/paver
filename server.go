@@ -2,16 +2,12 @@ package main
 
 import (
 	"bytes"
-	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/cristalhq/jwt/v4"
+	"git.263.nu/f/srv"
 	"io"
 	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -20,44 +16,30 @@ import (
 
 var (
 	pubkeyfile string
-	pubkey     *rsa.PublicKey
-	verifier   *jwt.RSAlg
 	roles      arrayFlag
 	tmpdir     string
 )
 
 var socket = "/tmp/paver-server.sock"
 
-type handler func(w http.ResponseWriter, r *http.Request)
-
 type formdata map[string][]byte
 
 func serve() {
 	check_server_flags()
 
-	if !socket_check() {
-		return
-	}
-
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
-
 	fmt.Printf("Public key is: %s\n", pubkeyfile)
 	fmt.Printf("Roles claim is: %s\n", roles)
 
-	mux := http.NewServeMux()
-	server_endpoints(mux)
-
-	l, err := net.Listen("unix", socket)
-	defer os.Remove(socket)
-
-	if err != nil {
-		panic(err)
-	}
-
-	os.Chmod("/tmp/paver-server.sock", 0777)
-
-	fmt.Println("Listening on socket:", "/tmp/paver-server.sock")
-	panic(http.Serve(l, mux))
+	srv.Run(
+		socket,
+		[]srv.Route{
+			{"/check", _check, nil},
+			{"/socket", _socket, nil},
+			{"/routines", _routines, roles},
+		},
+		pubkeyfile,
+	)
 }
 
 func check_server_flags() {
@@ -72,102 +54,6 @@ func check_server_flags() {
 		log.Fatal(errors.New("Specified temporary directory (still) does not exist!"))
 	}
 	t.Close()
-
-	content, err := ioutil.ReadFile(pubkeyfile)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	pubkey = parsekey(content)
-
-	verifier, err = jwt.NewVerifierRS(jwt.RS256, pubkey)
-	if err != nil {
-		log.Fatal(errors.New("No verifier"))
-	}
-}
-
-func socket_check() bool {
-	if _, err := os.Stat(socket); os.IsNotExist(err) {
-		return true
-	}
-
-	if conn, err := net.Dial("unix", socket); err == nil {
-		defer conn.Close()
-		fmt.Println("An instance of paver is already running!")
-		return false
-	}
-
-	fmt.Println("Removing stale socket")
-	os.Remove(socket)
-
-	return true
-}
-
-func parsekey(s []byte) *rsa.PublicKey {
-	block, _ := pem.Decode(s)
-	if block == nil {
-		panic("Could not decode PEM bytes")
-	}
-
-	key, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		panic(err)
-	}
-
-	return key.(*rsa.PublicKey)
-}
-
-func verifytoken(token *jwt.Token, pubkey *rsa.PublicKey) (ok bool, err error) {
-	ok = false
-
-	verifier, err := jwt.NewVerifierRS(jwt.RS256, pubkey)
-	if err != nil {
-		return ok, err
-	}
-
-	err = verifier.Verify(token)
-	if err == nil {
-		ok = true
-	}
-
-	return ok, err
-}
-
-func jwt_check(fn handler) handler {
-	return func(w http.ResponseWriter, r *http.Request) {
-		auth_header := r.Header.Get("Authorization")
-
-		if auth_header == "" {
-			http.Error(w, "No Authorization header.", http.StatusUnauthorized)
-			return
-		}
-
-		ts := strings.TrimPrefix(auth_header, "Bearer ")
-
-		t, err := jwt.Parse([]byte(ts), verifier)
-
-		ok, err := verifytoken(t, pubkey)
-		if !ok {
-			http.Error(w, "Shoo!", http.StatusForbidden)
-		}
-
-		var c userclaims
-
-		err = jwt.ParseClaims([]byte(ts), verifier, &c)
-
-		if err == nil {
-			for _, ro := range roles {
-				if ro == c.Role {
-					fn(w, r)
-					return
-				}
-			}
-		}
-
-		http.Error(w, "Could not get role", http.StatusUnauthorized)
-
-		return
-	}
 }
 
 func uri_test(url string) (status int, success bool) {
@@ -184,6 +70,7 @@ func uri_test(url string) (status int, success bool) {
 
 	success = (resp.StatusCode == http.StatusOK)
 	status = resp.StatusCode
+
 	return
 }
 

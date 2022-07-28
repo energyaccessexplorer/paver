@@ -80,12 +80,6 @@ func _check(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, "TJA!")
 }
 
-func server_endpoints(mux *http.ServeMux) {
-	mux.HandleFunc("/check", _check)
-	mux.HandleFunc("/socket", _socket)
-	mux.HandleFunc("/routines", jwt_check(_routines))
-}
-
 func server_admin_boundaries(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl": nil,

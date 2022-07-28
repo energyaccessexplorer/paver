@@ -20,11 +20,6 @@ var UUID_REGEXP = regexp.MustCompile("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-
 
 type filename = string
 
-type userclaims struct {
-	Role  string `json:"role"`
-	Email string `json:"email"`
-}
-
 func main() {
 	parse_flags()
 
