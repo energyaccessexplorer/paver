@@ -29,40 +29,30 @@ var server_routines = map[string]server_routine{
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "OPTIONS":
-		w.Header().Set("Allow", "POST")
-		w.WriteHeader(http.StatusOK)
-
-	case "POST":
-		q := r.URL.Query().Get("routine")
-		if q == "" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			io.WriteString(w, "routine query parameter is not optional")
-			return
-		}
-
-		if rtn := server_routines[q]; rtn == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			io.WriteString(w, "don't know what you mean by: "+q)
-		} else {
-			sid := r.URL.Query().Get("socket_id")
-			s := socket_table[sid]
-
-			jsonstr, err := rtn(r, s)
-
-			if err == nil {
-				io.WriteString(w, jsonstr)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-				io.WriteString(w, err.Error())
-			}
-
-			defer socket_destroy(sid, s, "routine finished")
-		}
-
-	default:
+	q := r.URL.Query().Get("routine")
+	if q == "" {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(w, "routine query parameter is not optional")
+		return
+	}
+
+	if rtn := server_routines[q]; rtn == nil {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(w, "don't know what you mean by: "+q)
+	} else {
+		sid := r.URL.Query().Get("socket_id")
+		s := socket_table[sid]
+
+		jsonstr, err := rtn(r, s)
+
+		if err == nil {
+			io.WriteString(w, jsonstr)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+			io.WriteString(w, err.Error())
+		}
+
+		defer socket_destroy(sid, s, "routine finished")
 	}
 }
 
@@ -72,11 +62,6 @@ func _socket(w http.ResponseWriter, r *http.Request) {
 }
 
 func _check(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case "GET":
-		w.WriteHeader(http.StatusOK)
-	}
-
 	io.WriteString(w, "TJA!")
 }
 

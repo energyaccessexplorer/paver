@@ -3,7 +3,7 @@ module energyaccessexplorer.org/paver
 go 1.17
 
 require (
-	git.263.nu/f/srv v0.0.0-20220730195217-118aaa38c1fa
+	git.263.nu/f/srv v0.0.0-20220731064543-314ff7a9df92
 	github.com/cristalhq/jwt/v4 v4.0.2
 	github.com/energyaccessexplorer/gdal v0.0.0-20220511141005-3759e3c812d5
 	github.com/satori/go.uuid v1.2.0

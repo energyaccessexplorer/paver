@@ -59,7 +59,6 @@ func check_server_flags() {
 }
 
 func uri_test(url string) (int, bool) {
-
 	if !strings.HasPrefix(url, "http") {
 		return http.StatusBadRequest, false
 	}
