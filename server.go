@@ -24,6 +24,8 @@ var socket = "/tmp/paver-server.sock"
 
 type formdata map[string][]byte
 
+type H map[string]srv.Handler
+
 func serve() {
 	check_server_flags()
 
@@ -34,9 +36,9 @@ func serve() {
 	srv.Run(
 		socket,
 		[]srv.Route{
-			{"/check", _check, nil},
-			{"/socket", _socket, nil},
-			{"/routines", _routines, roles},
+			{"/check", nil, H{"GET": _check}},
+			{"/socket", nil, H{"GET": _socket}},
+			{"/routines", roles, H{"POST": _routines}},
 		},
 		pubkeyfile,
 	)
@@ -56,22 +58,15 @@ func check_server_flags() {
 	t.Close()
 }
 
-func uri_test(url string) (status int, success bool) {
+func uri_test(url string) (int, bool) {
+
 	if !strings.HasPrefix(url, "http") {
-		success = false
-		status = http.StatusBadRequest
-		return
+		return http.StatusBadRequest, false
 	}
 
-	resp, err := http.Head(url)
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp, _ := http.Head(url)
 
-	success = (resp.StatusCode == http.StatusOK)
-	status = resp.StatusCode
-
-	return
+	return resp.StatusCode, (resp.StatusCode == http.StatusOK)
 }
 
 func snatch(location string) (fname string, err error) {

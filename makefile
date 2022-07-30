@@ -22,7 +22,7 @@ build:
 	@envsubst <paver.service-tmpl >paver.service
 
 clean:
-	-rm -f paver
+	-rm -f paver paver.service
 
 server:
 	-@pkill -9 paver
