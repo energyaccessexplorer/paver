@@ -52,6 +52,7 @@ func parse_flags() {
 	//
 	flag.Var(&roles, "role", "Roles permitted in the JWT claims")
 	flag.StringVar(&pubkeyfile, "pubkey", "", "Public key file to check JWTs")
+	flag.StringVar(&socket, "socket", "/tmp/paver-server.sock", "Socket file to run on")
 
 	flag.Parse()
 }

@@ -18,9 +18,8 @@ var (
 	pubkeyfile string
 	roles      arrayFlag
 	tmpdir     string
+	socket     string
 )
-
-var socket = "/tmp/paver-server.sock"
 
 type formdata map[string][]byte
 
