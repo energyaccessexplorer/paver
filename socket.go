@@ -33,7 +33,7 @@ func socket_create(id string, w http.ResponseWriter, r *http.Request) {
 
 	socket_table[id] = s
 
-	ctx, cancel := context.WithTimeout(r.Context(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Minute)
 	defer cancel()
 
 	select {
