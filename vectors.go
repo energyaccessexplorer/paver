@@ -116,6 +116,32 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	return out, err
 }
 
+func vectors_simplify(in filename, s float32) (filename, error) {
+	out := _filename()
+
+	opts := []string{
+		"-f", "GeoJSON",
+		"-simplify", fmt.Sprintf("%f", s),
+	}
+
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	if err != nil {
+		return "", err
+	}
+	defer src.Close()
+
+	release := capture()
+	dst, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+	defer dst.Close()
+
+	result := release()
+	if err != nil {
+		return "", errors.New(result)
+	}
+
+	return out, nil
+}
+
 func vectors_features_split(in filename, id string, w reporter) (intstringdict, error) {
 	w("VECTORS FEATURES")
 

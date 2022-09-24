@@ -82,7 +82,13 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 	}
 	w("%s <- zeros", zeros)
 
-	clipped, err := vectors_clip(stripped, ref, w)
+	simpl, err := vectors_simplify(ref, 0.001)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- simplified reference", simpl)
+
+	clipped, err := vectors_clip(in, simpl, w)
 	if err != nil {
 		return "", err
 	}
@@ -101,7 +107,7 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 	w("%s <- *proximity", prox)
 
 	w("CLEAN UP")
-	trash(in, ref, stripped, rstr, refprj)
+	trash(in, ref, stripped, rstr, refprj, simpl)
 
 	if run_server {
 		keeps := []filename{clipped, prox}
