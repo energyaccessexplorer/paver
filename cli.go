@@ -95,7 +95,7 @@ func cli() {
 			println("proximity output:", out)
 		}
 
-	case "idsraster":
+	case "ids-raster":
 		{
 			out, _ := raster_ids(inputfile, idfield, 1000)
 
@@ -124,7 +124,7 @@ func cli() {
 			println("csv output:", out)
 		}
 
-	case "csvpoints":
+	case "csv-points":
 		{
 			if len(selectfields) == 0 {
 				println("No -s (select fields) given.")
@@ -135,12 +135,12 @@ func cli() {
 			println("csv output:", out)
 		}
 
-	case "admin_boundaries":
+	case "admin-boundaries":
 		{
 			routine_admin_boundaries(nil, inputfile, idfield, 1000)
 		}
 
-	case "routine_clip_proximity":
+	case "routine-clip-proximity":
 		{
 			if referencefile == "" {
 				panic("No -r (referencefile) given:")
@@ -149,7 +149,7 @@ func cli() {
 			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield}, 1000)
 		}
 
-	case "routine_crop_raster":
+	case "routine-crop-raster":
 		{
 			if referencefile == "" {
 				panic("No -r (referencefile) given:")
