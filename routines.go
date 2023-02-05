@@ -6,6 +6,8 @@ import (
 )
 
 func routine_admin_boundaries(w reporter, in filename, idfield string, resolution int) (string, error) {
+	in = maybe_zip(in)
+
 	rprj, err := vectors_reproject(in, 3857)
 	if err != nil {
 		return "", err
@@ -64,6 +66,8 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 }
 
 func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
+	in = maybe_zip(in)
+
 	stripped, err := vectors_strip(in, fields)
 	if err != nil {
 		return "", err
@@ -184,6 +188,8 @@ func routine_csv_points(w reporter, in filename, ref filename, lnglat [2]string,
 }
 
 func routine_crop_raster(w reporter, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
+	in = maybe_zip(in)
+
 	var c raster_config
 	err := json.Unmarshal([]byte(conf), &c)
 	if err != nil {
@@ -216,6 +222,8 @@ func routine_crop_raster(w reporter, in filename, base filename, ref filename, c
 }
 
 func routine_subgeographies(w reporter, in filename, id string) (string, error) {
+	in = maybe_zip(in)
+
 	r, _ := vectors_features_split(in, id, w)
 
 	w("CLEAN UP")
