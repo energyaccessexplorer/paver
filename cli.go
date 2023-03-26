@@ -29,7 +29,7 @@ func (i *arrayFlag) Set(value string) error {
 }
 
 func cli() {
-	p := func(s string, x ...interface{}) {
+	p := func(s string, x ...any) {
 		println(fmt.Sprintf(s, x...))
 	}
 

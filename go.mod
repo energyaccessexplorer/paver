@@ -1,6 +1,6 @@
 module energyaccessexplorer.org/paver
 
-go 1.17
+go 1.20
 
 require (
 	git.263.nu/f/srv v0.0.0-20220731064543-314ff7a9df92
