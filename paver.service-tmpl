@@ -1,6 +1,5 @@
 [Unit]
 Description=Paver service
-Requires=postgresql.service
 
 [Service]
 User=${PAVER_USER}
