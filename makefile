@@ -29,7 +29,7 @@ server:
 	./${PAVER_CMD}
 
 install:
-	git pull
+	go get
 	bmake build
 
 	sudo install -o root -m 755 \
@@ -41,6 +41,8 @@ install:
 		/etc/systemd/system/
 
 deploy:
+	ssh ${PAVER_SERVER} "cd ~/paver; git stash; git pull; git stash pop;"
+
 	ssh ${PAVER_SERVER} "sudo systemctl stop paver.service"
 	ssh ${PAVER_SERVER} "cd ~/paver; bmake install;"
 	ssh ${PAVER_SERVER} "sudo systemctl daemon-reload"
