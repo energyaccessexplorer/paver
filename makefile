@@ -31,6 +31,7 @@ server:
 install:
 	git pull
 	bmake build
+
 	sudo install -o root -m 755 \
 		paver \
 		/usr/local/bin/
@@ -40,9 +41,9 @@ install:
 		/etc/systemd/system/
 
 deploy:
-	ssh eae "sudo systemctl stop paver.service"
-	ssh eae "cd ~/paver; bmake install;"
-	ssh eae "sudo systemctl daemon-reload"
-	ssh eae "sudo systemctl start paver.service"
+	ssh ${PAVER_SERVER} "sudo systemctl stop paver.service"
+	ssh ${PAVER_SERVER} "cd ~/paver; bmake install;"
+	ssh ${PAVER_SERVER} "sudo systemctl daemon-reload"
+	ssh ${PAVER_SERVER} "sudo systemctl start paver.service"
 
 all: clean build
