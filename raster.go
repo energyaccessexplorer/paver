@@ -69,13 +69,9 @@ func raster_geometry(in filename, zs filename) (filename, error) {
 		"-burn", "1",
 	}
 
-	c, ok := layer.FeatureCount(false)
+	_, ok := layer.FeatureCount(false)
 	if !ok {
 		return "", errors.New("Could not get feature count")
-	}
-
-	if c == 0 {
-		return "", errors.New("Feature count is ZERO")
 	}
 
 	release := capture()
