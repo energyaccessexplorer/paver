@@ -7,6 +7,7 @@ build:
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
 	go build -ldflags "-s \
+		-X main.SOCKET_ACCEPT_PATTERN=${PAVER_SOCKET_ACCEPT_PATTERN} \
 		-X main.tmpdir=${PAVER_TMPDIR} \
 		-X main.S3KEY=${PAVER_S3KEY} \
 		-X main.S3SECRET=${PAVER_S3SECRET} \

@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var SOCKET_ACCEPT_PATTERN string
+
 var socket_table = map[string]*websocket.Conn{}
 
 func socket_write(s *websocket.Conn, m string, r *http.Request) {
@@ -25,7 +27,10 @@ func socket_destroy(id string, s *websocket.Conn, m string) {
 }
 
 func socket_create(id string, w http.ResponseWriter, r *http.Request) {
-	s, err := websocket.Accept(w, r, nil)
+	s, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{SOCKET_ACCEPT_PATTERN},
+	})
+
 	if err != nil {
 		fmt.Printf("%v\n", err)
 		return
