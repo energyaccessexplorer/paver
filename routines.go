@@ -65,6 +65,38 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 	return jsonstr, nil
 }
 
+func routine_simplify(w reporter, in filename, factor float32) (string, error) {
+	in = maybe_zip(in)
+
+	simpl, err := vectors_simplify(in, factor)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- simplified", simpl)
+
+	prj, err := vectors_reproject(simpl, 3857)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- reprojected", prj)
+
+	if run_server {
+		keeps := []filename{prj}
+
+		for _, f := range keeps {
+			w("%s -> S3", f)
+			s3put(f)
+			trash(f)
+		}
+	}
+
+	w("DONE")
+
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s" }`, _uuid(prj))
+
+	return jsonstr, nil
+}
+
 func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
 	in = maybe_zip(in)
 

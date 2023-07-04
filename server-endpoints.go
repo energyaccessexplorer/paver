@@ -94,6 +94,42 @@ func server_admin_boundaries(r *http.Request, s *websocket.Conn) (string, error)
 	return jsonstr, nil
 }
 
+func server_simplify(r *http.Request, s *websocket.Conn) (string, error) {
+	f := formdata{
+		"dataseturl":   nil,
+		"referenceurl": nil,
+		"fields":       nil,
+		"resolution":   nil,
+	}
+
+	err := form_parse(&f, r)
+	if err != nil {
+		return "", err
+	}
+
+	inputfile, err := snatch(string(f["dataseturl"]))
+	if err != nil {
+		return "", err
+	}
+
+	factor, err := strconv.ParseFloat(string(f["factor"]), 32)
+	if err != nil {
+		return "", err
+	}
+
+	jsonstr, err := routine_simplify(
+		sw(r, s),
+		inputfile,
+		float32(factor),
+	)
+
+	if err != nil {
+		return "", err
+	}
+
+	return jsonstr, nil
+}
+
 func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl":   nil,

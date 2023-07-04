@@ -113,6 +113,15 @@ func cli() {
 			out, err = csv(inputfile, selectfields)
 		}
 
+	case "simplify":
+		{
+			if targetfile == "" {
+				panic("No -t (targetfile) given:")
+			}
+
+			out, err = vectors_simplify(inputfile, 0.01)
+		}
+
 	case "csv-points":
 		{
 			if len(selectfields) == 0 {
