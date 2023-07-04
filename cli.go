@@ -37,6 +37,9 @@ func cli() {
 		panic("No -i (input file) given")
 	}
 
+	var err error
+	var out string
+
 	switch command {
 	case "bounds":
 		{
@@ -50,14 +53,12 @@ func cli() {
 
 	case "subgeographies":
 		{
-			fmt.Println(routine_subgeographies(p, inputfile, idfield))
+			out, err = routine_subgeographies(p, inputfile, idfield)
 		}
 
 	case "zeros":
 		{
-			out, _ := raster_zeros(inputfile, 1000)
-
-			println("zeroes output:", out)
+			out, err = raster_zeros(inputfile, 1000)
 		}
 
 	case "strip":
@@ -66,9 +67,7 @@ func cli() {
 				panic("No -s (select fields) given.")
 			}
 
-			out, _ := vectors_strip(inputfile, selectfields)
-
-			println("strip output:", out)
+			out, err = vectors_strip(inputfile, selectfields)
 		}
 
 	case "rasterise":
@@ -77,9 +76,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, _ := raster_geometry(inputfile, targetfile)
-
-			println("rasterise output:", out)
+			out, err = raster_geometry(inputfile, targetfile)
 		}
 
 	case "proximity":
@@ -90,16 +87,12 @@ func cli() {
 
 			r, _ := raster_geometry(inputfile, targetfile)
 
-			out, _ := raster_proximity(r)
-
-			println("proximity output:", out)
+			out, err = raster_proximity(r)
 		}
 
 	case "ids-raster":
 		{
-			out, _ := raster_ids(inputfile, idfield, 1000)
-
-			println("ids_raster output:", out)
+			out, err = raster_ids(inputfile, idfield, 1000)
 		}
 
 	case "clip":
@@ -108,9 +101,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, _ := vectors_clip(inputfile, targetfile, p)
-
-			println("clip output:", out)
+			out, err = vectors_clip(inputfile, targetfile, p)
 		}
 
 	case "csv":
@@ -119,9 +110,7 @@ func cli() {
 				panic("No -s (select fields) given.")
 			}
 
-			out, _ := csv(inputfile, selectfields)
-
-			println("csv output:", out)
+			out, err = csv(inputfile, selectfields)
 		}
 
 	case "csv-points":
@@ -130,14 +119,12 @@ func cli() {
 				println("No -s (select fields) given.")
 			}
 
-			out, _ := csv_points(inputfile, [2]string{"Longitude", "Latitude"}, selectfields)
-
-			println("csv output:", out)
+			out, err = csv_points(inputfile, [2]string{"Longitude", "Latitude"}, selectfields)
 		}
 
 	case "admin-boundaries":
 		{
-			routine_admin_boundaries(nil, inputfile, idfield, 1000)
+			out, err = routine_admin_boundaries(nil, inputfile, idfield, 1000)
 		}
 
 	case "routine-clip-proximity":
@@ -146,7 +133,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_clip_proximity(nil, inputfile, referencefile, []string{idfield}, 1000)
+			out, err = routine_clip_proximity(p, inputfile, referencefile, []string{idfield}, 1000)
 		}
 
 	case "routine-crop-raster":
@@ -159,7 +146,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			routine_crop_raster(nil, inputfile, basefile, referencefile, "{\"nodata\": -1, \"numbertype\": \"Int16\", \"resample\": \"average\"}", 1000)
+			out, err = routine_crop_raster(nil, inputfile, basefile, referencefile, "{\"nodata\": -1, \"numbertype\": \"Int16\", \"resample\": \"average\"}", 1000)
 		}
 
 	case "s3put":
@@ -171,5 +158,11 @@ func cli() {
 		{
 			println("No (valid) -c command given:", command)
 		}
+	}
+
+	if err != nil {
+		println(err.Error())
+	} else {
+		println(out)
 	}
 }
