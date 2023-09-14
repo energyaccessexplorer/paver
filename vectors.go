@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -245,67 +246,18 @@ func vectors_fields(in filename) []string {
 	return a
 }
 
-func _maybe_zip(in filename) string {
-	C.CPLSetConfigOption(C.CString("SHAPE_RESTORE_SHX"), C.CString("NO"))
-
-	fmt.Println("HERE 0")
-
-	r, err := zip.OpenReader(in)
-	if err == nil {
-		in = "/vsizip/{" + in + "}"
-	} else {
-		return in
-	}
-	r.Close()
-
-	fmt.Println("HERE 1", in)
-
-	out := _filename()
-
-	opts := []string{
-		"-f", "GeoJSON",
-	}
-
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer src.Close()
-
-	fmt.Println("HERE 2")
-
-	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer dest.Close()
-
-	fmt.Println("HERE 3")
-	fmt.Println("HERE 4")
-
-	return out
-}
-
 func maybe_zip(in filename) string {
 	r, err := zip.OpenReader(in)
-	if err == nil {
-		in = "/vsizip/{" + in + "}"
-	} else {
+	if err != nil {
 		return in
 	}
-	r.Close()
+	defer r.Close()
 
 	out := _filename()
 
-	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, in)
-	stdout, err := cmd.Output()
-
-	if err != nil {
-		fmt.Println("cmd::::::", stdout)
-	}
-
-	fmt.Println(cmd.String())
-	fmt.Println(out)
+	os.Rename(in, in+".zip")
+	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, "/vsizip/"+in+".zip")
+	cmd.Output()
 
 	return out
 }
