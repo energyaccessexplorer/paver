@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -48,8 +49,9 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			io.WriteString(w, jsonstr)
 		} else {
+			j, _ := json.Marshal(map[string]string{"error": err.Error()})
 			w.WriteHeader(http.StatusInternalServerError)
-			io.WriteString(w, err.Error())
+			io.WriteString(w, string(j))
 		}
 
 		defer socket_destroy(sid, s, "routine finished")
