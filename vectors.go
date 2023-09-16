@@ -43,18 +43,23 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 		fields = append(fields, "-select", strings.Join(fields, ","))
 	}
 
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
-	if err != nil {
-		return "", err
-	}
-	defer src.Close()
-
 	release := capture()
-	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 
 	result := release()
 	if err != nil {
 		err = errors.New(result)
+		w(err.Error())
+		return "", err
+	}
+	defer src.Close()
+
+	release1 := capture()
+	dest, err := gdal.VectorTranslate(out, []gdal.Dataset{src}, opts)
+
+	result1 := release1()
+	if err != nil {
+		err = errors.New(result1)
 		w(err.Error())
 		return "", err
 	}
