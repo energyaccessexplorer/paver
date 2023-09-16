@@ -58,7 +58,7 @@ func cli() {
 
 	case "zeros":
 		{
-			out, err = raster_zeros(inputfile, 1000)
+			out, err = raster_zeros(inputfile, 1000, p)
 		}
 
 	case "strip":
@@ -67,7 +67,7 @@ func cli() {
 				panic("No -s (select fields) given.")
 			}
 
-			out, err = vectors_strip(inputfile, selectfields)
+			out, err = vectors_strip(inputfile, selectfields, p)
 		}
 
 	case "rasterise":
@@ -76,7 +76,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, err = raster_geometry(inputfile, targetfile)
+			out, err = raster_geometry(inputfile, targetfile, p)
 		}
 
 	case "proximity":
@@ -85,14 +85,14 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			r, _ := raster_geometry(inputfile, targetfile)
+			r, _ := raster_geometry(inputfile, targetfile, p)
 
-			out, err = raster_proximity(r)
+			out, err = raster_proximity(r, p)
 		}
 
 	case "ids-raster":
 		{
-			out, err = raster_ids(inputfile, idfield, 1000)
+			out, err = raster_ids(inputfile, idfield, 1000, p)
 		}
 
 	case "clip":
@@ -119,7 +119,7 @@ func cli() {
 				panic("No -t (targetfile) given:")
 			}
 
-			out, err = vectors_simplify(inputfile, 0.01)
+			out, err = vectors_simplify(inputfile, 0.01, p)
 		}
 
 	case "csv-points":

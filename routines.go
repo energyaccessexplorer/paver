@@ -8,25 +8,25 @@ import (
 func routine_admin_boundaries(w reporter, in filename, idfield string, resolution int) (string, error) {
 	in = maybe_zip(in)
 
-	rprj, err := vectors_reproject(in, 3857)
+	rprj, err := vectors_reproject(in, 3857, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- reprojected", rprj)
 
-	ids, err := raster_ids(rprj, idfield, resolution)
+	ids, err := raster_ids(rprj, idfield, resolution, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- *raster ids", ids)
 
-	stripped, err := vectors_strip(rprj, []string{idfield})
+	stripped, err := vectors_strip(rprj, []string{idfield}, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- stripped", stripped)
 
-	rprjstripped, err := vectors_reproject(in, 4326)
+	rprjstripped, err := vectors_reproject(in, 4326, w)
 	if err != nil {
 		return "", err
 	}
@@ -68,13 +68,13 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 	in = maybe_zip(in)
 
-	simpl, err := vectors_simplify(in, factor)
+	simpl, err := vectors_simplify(in, factor, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- simplified", simpl)
 
-	prj, err := vectors_reproject(simpl, 3857)
+	prj, err := vectors_reproject(simpl, 3857, w)
 	if err != nil {
 		return "", err
 	}
@@ -100,25 +100,25 @@ func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
 	in = maybe_zip(in)
 
-	stripped, err := vectors_strip(in, fields)
+	stripped, err := vectors_strip(in, fields, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- stripped", stripped)
 
-	refprj, err := vectors_reproject(ref, 3857)
+	refprj, err := vectors_reproject(ref, 3857, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- reprojected reference", refprj)
 
-	zeros, err := raster_zeros(refprj, resolution)
+	zeros, err := raster_zeros(refprj, resolution, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- zeros", zeros)
 
-	simpl, err := vectors_simplify(ref, 0.001)
+	simpl, err := vectors_simplify(ref, 0.001, w)
 	if err != nil {
 		return "", err
 	}
@@ -130,13 +130,13 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 	}
 	w("%s <- *clipped", clipped)
 
-	rstr, err := raster_geometry(clipped, zeros)
+	rstr, err := raster_geometry(clipped, zeros, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- rasterised <- zeros", rstr) // overwrites zeros
 
-	prox, err := raster_proximity(rstr)
+	prox, err := raster_proximity(rstr, w)
 	if err != nil {
 		return "", err
 	}
@@ -169,13 +169,13 @@ func routine_csv_points(w reporter, in filename, ref filename, lnglat [2]string,
 	}
 	w("%s <- csv points", points)
 
-	refprj, err := vectors_reproject(ref, 3857)
+	refprj, err := vectors_reproject(ref, 3857, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- reprojected reference", refprj)
 
-	zeros, err := raster_zeros(refprj, resolution)
+	zeros, err := raster_zeros(refprj, resolution, w)
 	if err != nil {
 		return "", err
 	}
@@ -187,13 +187,13 @@ func routine_csv_points(w reporter, in filename, ref filename, lnglat [2]string,
 	}
 	w("%s <- *clipped", clipped)
 
-	rstr, err := raster_geometry(clipped, zeros)
+	rstr, err := raster_geometry(clipped, zeros, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- rasterised <- zeros", rstr) // overwrites zeros
 
-	prox, err := raster_proximity(rstr)
+	prox, err := raster_proximity(rstr, w)
 	if err != nil {
 		return "", err
 	}

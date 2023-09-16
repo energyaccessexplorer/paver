@@ -32,7 +32,7 @@ import (
 
 type intstringdict map[int64]string
 
-func vectors_strip(in filename, fields []string) (filename, error) {
+func vectors_strip(in filename, fields []string, w reporter) (filename, error) {
 	out := _filename()
 
 	opts := []string{
@@ -68,7 +68,7 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 	return out, err
 }
 
-func vectors_reproject(in filename, epsg int) (filename, error) {
+func vectors_reproject(in filename, epsg int, w reporter) (filename, error) {
 	out := _filename()
 
 	opts := []string{
@@ -150,7 +150,7 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	return out, err
 }
 
-func vectors_simplify(in filename, s float32) (filename, error) {
+func vectors_simplify(in filename, s float32, w reporter) (filename, error) {
 	out := _filename()
 
 	opts := []string{

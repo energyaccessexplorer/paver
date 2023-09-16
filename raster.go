@@ -13,7 +13,7 @@ type raster_config struct {
 	Resample   string `json:"resample"`
 }
 
-func raster_ids(in filename, gid string, resolution int) (filename, error) {
+func raster_ids(in filename, gid string, resolution int, w reporter) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -48,7 +48,7 @@ func raster_ids(in filename, gid string, resolution int) (filename, error) {
 	return out, err
 }
 
-func raster_geometry(in filename, zs filename) (filename, error) {
+func raster_geometry(in filename, zs filename, w reporter) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -88,7 +88,7 @@ func raster_geometry(in filename, zs filename) (filename, error) {
 	return zs, err
 }
 
-func raster_proximity(in filename) (filename, error) {
+func raster_proximity(in filename, w reporter) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
@@ -130,7 +130,7 @@ func raster_proximity(in filename) (filename, error) {
 	return out, err
 }
 
-func raster_zeros(in filename, resolution int) (filename, error) {
+func raster_zeros(in filename, resolution int, w reporter) (filename, error) {
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
