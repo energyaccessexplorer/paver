@@ -54,7 +54,9 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 
 	result := release()
 	if err != nil {
-		return "", errors.New(result)
+		err = errors.New(result)
+		w(err.Error())
+		return "", err
 	}
 	defer dest.Close()
 
