@@ -32,14 +32,14 @@ var server_routines = map[string]server_routine{
 func _routines(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("routine")
 	if q == "" {
-		w.WriteHeader(http.StatusMethodNotAllowed)
 		io.WriteString(w, "routine query parameter is not optional")
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
 	if rtn := server_routines[q]; rtn == nil {
-		w.WriteHeader(http.StatusMethodNotAllowed)
 		io.WriteString(w, "don't know what you mean by: "+q)
+		w.WriteHeader(http.StatusMethodNotAllowed)
 	} else {
 		sid := r.URL.Query().Get("socket_id")
 		s := socket_table[sid]
