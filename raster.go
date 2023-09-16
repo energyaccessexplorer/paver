@@ -208,7 +208,9 @@ func raster_crop(in filename, base filename, ref filename, c raster_config, res 
 
 	result := release()
 	if err != nil {
-		return "", errors.New(result)
+		err = errors.New(result)
+		w(err.Error())
+		return "", err
 	}
 	defer r_src.Close()
 
@@ -231,7 +233,9 @@ func raster_crop(in filename, base filename, ref filename, c raster_config, res 
 
 	result1 := release1()
 	if err != nil {
-		return "", errors.New(result1)
+		err = errors.New(result1)
+		w(err.Error())
+		return "", err
 	}
 	defer dest.Close()
 

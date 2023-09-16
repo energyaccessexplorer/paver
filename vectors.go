@@ -122,7 +122,9 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 
 	result := release()
 	if err != nil {
-		return "", errors.New(result)
+		err = errors.New(result)
+		w(err.Error())
+		return "", err
 	}
 
 	ds.Destroy()
