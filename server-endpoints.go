@@ -50,7 +50,7 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, jsonstr)
 		} else {
 			j, _ := json.Marshal(map[string]string{"error": err.Error()})
-			w.WriteHeader(http.StatusInternalServerError)
+			w.WriteHeader(http.StatusBadRequest)
 			io.WriteString(w, string(j))
 		}
 
