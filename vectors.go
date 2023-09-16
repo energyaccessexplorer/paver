@@ -37,7 +37,10 @@ func vectors_strip(in filename, fields []string) (filename, error) {
 
 	opts := []string{
 		"-f", "GeoJSON",
-		"-select", strings.Join(fields, ","),
+	}
+
+	if len(fields) > 1 {
+		fields = append(fields, "-select", strings.Join(fields, ","))
 	}
 
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
