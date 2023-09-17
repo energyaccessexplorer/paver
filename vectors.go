@@ -48,8 +48,8 @@ func vectors_strip(in filename, fields []string, w reporter) (filename, error) {
 
 	result := release()
 	if err != nil {
-		err = errors.New(result)
 		w(err.Error())
+		w(result)
 		return "", err
 	}
 	defer src.Close()
@@ -59,8 +59,8 @@ func vectors_strip(in filename, fields []string, w reporter) (filename, error) {
 
 	result1 := release1()
 	if err != nil {
-		err = errors.New(result1)
 		w(err.Error())
+		w(result1)
 		return "", err
 	}
 	defer dest.Close()
@@ -132,8 +132,8 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 
 	result := release()
 	if err != nil {
-		err = errors.New(result)
 		w(err.Error())
+		w(result)
 		return "", err
 	}
 
@@ -267,8 +267,12 @@ func maybe_zip(in filename) string {
 
 	out := _filename()
 
-	os.Rename(in, in+".zip")
-	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, "/vsizip/"+in+".zip")
+	if !strings.HasSuffix(in, ".zip") {
+		os.Rename(in, in+".zip")
+		in = in + ".zip"
+	}
+
+	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, "/vsizip/"+in)
 	cmd.Output()
 
 	return out
