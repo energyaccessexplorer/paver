@@ -88,7 +88,9 @@ func vectors_reproject(in filename, epsg int, w reporter) (filename, error) {
 
 	result := release()
 	if err != nil {
-		return "", errors.New(result)
+		w(err.Error())
+		w(result)
+		return "", err
 	}
 
 	return out, nil
@@ -158,8 +160,13 @@ func vectors_simplify(in filename, s float32, w reporter) (filename, error) {
 		"-simplify", fmt.Sprintf("%f", s),
 	}
 
+	release0 := capture()
 	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+
+	result0 := release0()
 	if err != nil {
+		w(err.Error())
+		w(result0)
 		return "", err
 	}
 	defer src.Close()
@@ -170,7 +177,9 @@ func vectors_simplify(in filename, s float32, w reporter) (filename, error) {
 
 	result := release()
 	if err != nil {
-		return "", errors.New(result)
+		w(err.Error())
+		w(result)
+		return "", err
 	}
 
 	return out, nil
