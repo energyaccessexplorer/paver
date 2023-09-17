@@ -7,6 +7,7 @@ import (
 
 func routine_admin_boundaries(w reporter, in filename, idfield string, resolution int) (string, error) {
 	in = maybe_zip(in)
+	in = maybe_shp(in)
 
 	rprj, err := vectors_reproject(in, 3857, w)
 	if err != nil {
@@ -67,6 +68,7 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 
 func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 	in = maybe_zip(in)
+	in = maybe_shp(in)
 
 	simpl, err := vectors_simplify(in, factor, w)
 	if err != nil {
@@ -99,6 +101,7 @@ func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 
 func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
 	in = maybe_zip(in)
+	in = maybe_shp(in)
 
 	stripped, err := vectors_strip(in, fields, w)
 	if err != nil {
@@ -221,6 +224,7 @@ func routine_csv_points(w reporter, in filename, ref filename, lnglat [2]string,
 
 func routine_crop_raster(w reporter, in filename, base filename, ref filename, conf string, resolution int) (string, error) {
 	in = maybe_zip(in)
+	in = maybe_shp(in)
 
 	var c raster_config
 	err := json.Unmarshal([]byte(conf), &c)
@@ -255,6 +259,7 @@ func routine_crop_raster(w reporter, in filename, base filename, ref filename, c
 
 func routine_subgeographies(w reporter, in filename, id string) (string, error) {
 	in = maybe_zip(in)
+	in = maybe_shp(in)
 
 	r, _ := vectors_features_split(in, id, w)
 

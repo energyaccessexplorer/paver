@@ -21,6 +21,7 @@ import "C"
 
 import (
 	"archive/zip"
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
@@ -283,6 +284,34 @@ func maybe_zip(in filename) string {
 
 	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, "/vsizip/"+in)
 	cmd.Output()
+
+	return out
+}
+
+func maybe_shp(in filename) string {
+	f, _ := os.Open(in)
+	defer f.Close()
+
+	h := []byte{0, 0, 39, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+
+	b := make([]byte, 20)
+
+	f.Read(b)
+
+	if !bytes.Equal(b, h) {
+		return in
+	}
+
+	out := _filename()
+
+	if !strings.HasSuffix(in, ".shp") {
+		os.Rename(in, in+".shp")
+		in = in + ".shp"
+	}
+
+	os.Setenv("SHAPE_RESTORE_SHX", "YES")
+	cmd := exec.Command("ogr2ogr", "-f", "GeoJSON", out, in)
+	fmt.Println(cmd.Output())
 
 	return out
 }
