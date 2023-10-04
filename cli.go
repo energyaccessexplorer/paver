@@ -142,7 +142,7 @@ func cli() {
 				panic("No -r (referencefile) given:")
 			}
 
-			out, err = routine_clip_proximity(p, inputfile, referencefile, []string{idfield}, 1000)
+			out, err = routine_clip_proximity(p, inputfile, referencefile, []string{idfield}, 1000, 0.001)
 		}
 
 	case "routine-crop-raster":

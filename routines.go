@@ -99,7 +99,7 @@ func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 	return jsonstr, nil
 }
 
-func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int) (string, error) {
+func routine_clip_proximity(w reporter, in filename, ref filename, fields []string, resolution int, simplify float32) (string, error) {
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
@@ -121,7 +121,7 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 	}
 	w("%s <- zeros", zeros)
 
-	simpl, err := vectors_simplify(ref, 0.001, w)
+	simpl, err := vectors_simplify(ref, simplify, w)
 	if err != nil {
 		return "", err
 	}

@@ -138,6 +138,7 @@ func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 		"referenceurl": nil,
 		"fields":       nil,
 		"resolution":   nil,
+		"simplify":     nil,
 	}
 
 	err := form_parse(&f, r)
@@ -157,12 +158,16 @@ func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
+	_simp, _ := strconv.ParseFloat(string(f["simplify"]), 32) // f["simplify"]
+	simp := float32(_simp)
+
 	jsonstr, err := routine_clip_proximity(
 		sw(r, s),
 		inputfile,
 		referencefile,
 		strings.Split(string(f["fields"]), ","),
 		res,
+		simp,
 	)
 
 	if err != nil {
