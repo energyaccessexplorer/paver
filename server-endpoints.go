@@ -24,8 +24,9 @@ type server_routine func(*http.Request, *websocket.Conn) (string, error)
 var server_routines = map[string]server_routine{
 	"admin-boundaries": server_admin_boundaries,
 	"clip-proximity":   server_clip_proximity,
-	"csv-points":       server_csv_points,
 	"crop-raster":      server_crop_raster,
+	"csv-points":       server_csv_points,
+	"simplify":         server_simplify,
 	"subgeographies":   server_subgeographies,
 }
 
@@ -98,10 +99,8 @@ func server_admin_boundaries(r *http.Request, s *websocket.Conn) (string, error)
 
 func server_simplify(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
-		"dataseturl":   nil,
-		"referenceurl": nil,
-		"fields":       nil,
-		"resolution":   nil,
+		"dataseturl": nil,
+		"simplify":   nil,
 	}
 
 	err := form_parse(&f, r)
@@ -114,7 +113,7 @@ func server_simplify(r *http.Request, s *websocket.Conn) (string, error) {
 		return "", err
 	}
 
-	factor, err := strconv.ParseFloat(string(f["factor"]), 32)
+	factor, err := strconv.ParseFloat(string(f["simplify"]), 32)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +157,7 @@ func server_clip_proximity(r *http.Request, s *websocket.Conn) (string, error) {
 
 	res, _ := strconv.Atoi(string(f["resolution"]))
 
-	_simp, _ := strconv.ParseFloat(string(f["simplify"]), 32) // f["simplify"]
+	_simp, _ := strconv.ParseFloat(string(f["simplify"]), 32)
 	simp := float32(_simp)
 
 	jsonstr, err := routine_clip_proximity(
