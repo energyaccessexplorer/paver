@@ -33,14 +33,14 @@ var server_routines = map[string]server_routine{
 func _routines(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("routine")
 	if q == "" {
-		io.WriteString(w, "routine query parameter is not optional")
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(w, "routine query parameter is not optional")
 		return
 	}
 
 	if rtn := server_routines[q]; rtn == nil {
-		io.WriteString(w, "don't know what you mean by: "+q)
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		io.WriteString(w, "don't know what you mean by: "+q)
 	} else {
 		sid := r.URL.Query().Get("socket_id")
 		s := socket_table[sid]
@@ -51,8 +51,8 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 			io.WriteString(w, jsonstr)
 		} else {
 			j, _ := json.Marshal(map[string]string{"error": err.Error()})
-			io.WriteString(w, string(j))
 			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, string(j))
 		}
 
 		defer socket_destroy(sid, s, "routine finished")
