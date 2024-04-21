@@ -101,6 +101,8 @@ func server_simplify(r *http.Request, s *websocket.Conn) (string, error) {
 	f := formdata{
 		"dataseturl": nil,
 		"simplify":   nil,
+		"resolution": nil,
+		"field":      nil,
 	}
 
 	err := form_parse(&f, r)
@@ -118,10 +120,17 @@ func server_simplify(r *http.Request, s *websocket.Conn) (string, error) {
 		return "", err
 	}
 
+	resolution, err := strconv.Atoi(string(f["resolution"]))
+	if err != nil {
+		return "", err
+	}
+
 	jsonstr, err := routine_simplify(
 		sw(r, s),
 		inputfile,
 		float32(factor),
+		string(f["field"]),
+		int(resolution),
 	)
 
 	if err != nil {

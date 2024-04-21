@@ -66,7 +66,7 @@ func routine_admin_boundaries(w reporter, in filename, idfield string, resolutio
 	return jsonstr, nil
 }
 
-func routine_simplify(w reporter, in filename, factor float32) (string, error) {
+func routine_simplify(w reporter, in filename, factor float32, idfield string, resolution int) (string, error) {
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
@@ -74,16 +74,18 @@ func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	w("%s <- simplified", simpl)
+	w("%s <- *simplified", simpl)
 
-	prj, err := vectors_reproject(simpl, 3857, w)
+	w("%s <- zeros", resolution)
+
+	ids, err := raster_ids(simpl, idfield, resolution, w)
 	if err != nil {
 		return "", err
 	}
-	w("%s <- reprojected", prj)
+	w("%s <- *raster ids", ids)
 
 	if run_server {
-		keeps := []filename{prj}
+		keeps := []filename{simpl, ids}
 
 		for _, f := range keeps {
 			w("%s -> S3", f)
@@ -94,7 +96,7 @@ func routine_simplify(w reporter, in filename, factor float32) (string, error) {
 
 	w("DONE")
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s" }`, _uuid(prj))
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(simpl), _uuid(ids))
 
 	return jsonstr, nil
 }
@@ -114,6 +116,8 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 		return "", err
 	}
 	w("%s <- reprojected reference", refprj)
+
+	w("%s <- zeros", resolution)
 
 	zeros, err := raster_zeros(refprj, resolution, w)
 	if err != nil {
