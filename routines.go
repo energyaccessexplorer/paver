@@ -70,13 +70,13 @@ func routine_simplify(w reporter, in filename, factor float32, idfield string, r
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
+	// reproject here?
+
 	simpl, err := vectors_simplify(in, factor, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- *simplified", simpl)
-
-	w("%s <- zeros", resolution)
 
 	ids, err := raster_ids(simpl, idfield, resolution, w)
 	if err != nil {
@@ -116,8 +116,6 @@ func routine_clip_proximity(w reporter, in filename, ref filename, fields []stri
 		return "", err
 	}
 	w("%s <- reprojected reference", refprj)
-
-	w("%s <- zeros", resolution)
 
 	zeros, err := raster_zeros(refprj, resolution, w)
 	if err != nil {
