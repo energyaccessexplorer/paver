@@ -70,15 +70,19 @@ func routine_simplify(w reporter, in filename, factor float32, idfield string, r
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
-	// reproject here?
-
 	simpl, err := vectors_simplify(in, factor, w)
 	if err != nil {
 		return "", err
 	}
 	w("%s <- *simplified", simpl)
 
-	ids, err := raster_ids(simpl, idfield, resolution, w)
+	prj, err := vectors_reproject(simpl, 3857, w)
+	if err != nil {
+		return "", err
+	}
+	w("%s <- reprojected", prj)
+
+	ids, err := raster_ids(prj, idfield, resolution, w)
 	if err != nil {
 		return "", err
 	}
