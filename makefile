@@ -1,9 +1,21 @@
-include .env
-
 default: clean build
 
+.include .env
+
+PAVER_CMD = paver \
+	-server \
+	-role admin \
+	-role leader \
+	-role manager \
+	-role director \
+	-role root \
+	-pubkey ${PAVER_PUBKEY} \
+	-socket ${PAVER_SOCKET}
+
 build:
+	go get
 	go fmt
+
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include" \
 	go build -ldflags "-s \
@@ -25,12 +37,7 @@ build:
 clean:
 	-rm -f paver paver.service
 
-server:
-	-@pkill -9 paver
-	./${PAVER_CMD}
-
 install:
-	go get
 	bmake build
 
 	sudo install -o root -m 755 \
@@ -42,10 +49,9 @@ install:
 		/etc/systemd/system/
 
 deploy:
-	ssh ${PAVER_SERVER} "cd ~/paver; git stash; git pull; git stash pop;"
-
+	ssh ${PAVER_SERVER} "cd ${PAVER_WORKSPACE}; git stash; git pull; git stash pop;"
 	ssh ${PAVER_SERVER} "sudo systemctl stop paver.service"
-	ssh ${PAVER_SERVER} "cd ~/paver; bmake install;"
+	ssh ${PAVER_SERVER} "cd ${PAVER_WORKSPACE}; bmake install;"
 	ssh ${PAVER_SERVER} "sudo systemctl daemon-reload"
 	ssh ${PAVER_SERVER} "sudo systemctl start paver.service"
 
