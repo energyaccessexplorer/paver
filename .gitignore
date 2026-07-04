@@ -1,4 +1,6 @@
 /paver
 /paver.service
 /.env
-/buckets.json
+/paver-buckets.json
+/go.mod.orig
+/deploy.diff
