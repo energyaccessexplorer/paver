@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -48,6 +49,14 @@ func s3config_get(name string) (_ s3config, err error) {
 	err = errors.New("bucket config not found: " + name)
 
 	return
+}
+
+func s3endpoint(s3 s3config, key string) string {
+	return fmt.Sprintf("https://%s.%s/%s/%s", s3.Bucket, s3.Provider, s3.Directory, key)
+}
+
+func (p routine_params) url(fname filename) string {
+	return s3endpoint(p.S3, _uuid(fname))
 }
 
 func s3put(fname filename, s3 s3config) bool {

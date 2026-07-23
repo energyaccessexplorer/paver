@@ -70,8 +70,8 @@ func routine_admin_boundaries(w reporter, p routine_params) (string, error) {
 
 	jsonstr := fmt.Sprintf(
 		`{ "vectors": "%s", "raster": "%s", "info": %s }`,
-		_uuid(rprjstripped),
-		_uuid(ids),
+		p.url(rprjstripped),
+		p.url(ids),
 		jinfo,
 	)
 
@@ -109,7 +109,7 @@ func routine_simplify(w reporter, p routine_params) (string, error) {
 		return "", err
 	}
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(simpl), _uuid(ids))
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, p.url(simpl), p.url(ids))
 
 	return jsonstr, nil
 }
@@ -183,7 +183,7 @@ func routine_clip_proximity(w reporter, p routine_params) (string, error) {
 		return "", err
 	}
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(last), _uuid(prox))
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, p.url(last), p.url(prox))
 
 	return jsonstr, nil
 }
@@ -233,7 +233,7 @@ func routine_csv_points(w reporter, p routine_params) (string, error) {
 		return "", err
 	}
 
-	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(clipped), _uuid(prox))
+	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, p.url(clipped), p.url(prox))
 
 	return jsonstr, nil
 }
@@ -257,7 +257,7 @@ func routine_crop_raster(w reporter, p routine_params) (string, error) {
 		return "", err
 	}
 
-	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, _uuid(cropped))
+	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, s3endpoint(p.S3, _uuid(cropped)))
 
 	return jsonstr, nil
 }
@@ -270,7 +270,7 @@ func routine_subgeographies(w reporter, p routine_params) (string, error) {
 	r, _ := vectors_features_split(in, p.Attr, w)
 
 	for i, f := range r {
-		r[i] = _uuid(r[i])
+		r[i] = s3endpoint(p.S3, _uuid(r[i]))
 		if err := cleanup([]filename{f}, []filename{}, w, p.S3); err != nil {
 			return "", err
 		}
@@ -289,7 +289,7 @@ func routine_vectors_extra_attributes(w reporter, p routine_params) (string, err
 	r, _ := vectors_features_extra_attrs(in, w)
 
 	for i, f := range r {
-		r[i] = _uuid(r[i])
+		r[i] = s3endpoint(p.S3, _uuid(r[i]))
 		if err := cleanup([]filename{f}, []filename{}, w, p.S3); err != nil {
 			return "", err
 		}
@@ -341,7 +341,7 @@ func routine_csv_raster(w reporter, p routine_params) (string, error) {
 		return "", err
 	}
 
-	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, _uuid(rstr))
+	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, s3endpoint(p.S3, _uuid(rstr)))
 
 	return jsonstr, nil
 }
