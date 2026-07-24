@@ -1,0 +1,12 @@
+[Unit]
+Description=Paver staging orchestrator (on-demand per-ticket staging instances)
+
+[Service]
+User=${PAVER_USER}
+WorkingDirectory=${PAVER_WORKDIR}
+ExecStartPre=rm -f ${PAVER_STAGING_ORCHESTRATOR_SOCKET}
+ExecStart=${PAVER_STAGING_ORCHESTRATOR_CMD}
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

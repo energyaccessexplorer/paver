@@ -1,0 +1,55 @@
+name: TEST DEPLOY
+
+# Builds a per-ticket paver binary and POSTs it to the orchestrator's
+# /deploy/<TICKET> endpoint, which handles storage, permissions, and
+# restarting any already-running instance. See paver/orchestrator/.
+
+on:
+  push:
+    branches: [ '**', '!trunk', '!production' ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Parse ticket tag from commit message
+        id: ticket
+        run: |
+          MSG=${{ toJSON(github.event.head_commit.message) }}
+          if [[ "$MSG" =~ \[Tests\ ([A-Z]+-[0-9]+)\] ]]; then
+            echo "id=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+            echo "matched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "matched=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.ticket.outputs.matched == 'true'
+
+      - uses: actions/setup-go@v5
+        if: steps.ticket.outputs.matched == 'true'
+        with:
+          go-version: 'stable'
+
+      - name: Install GDAL
+        if: steps.ticket.outputs.matched == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev gdal-bin pkg-config
+
+      - name: Build
+        if: steps.ticket.outputs.matched == 'true'
+        run: |
+          export CGO_LDFLAGS="$(gdal-config --libs)"
+          export CGO_CFLAGS="$(gdal-config --cflags)"
+          go build -ldflags "-s -X main.SOCKET_ACCEPT_PATTERN=${{ vars.PAVER_STAGING_SOCKET_ACCEPT_PATTERN }}" -o paver .
+
+      - name: Deploy
+        if: steps.ticket.outputs.matched == 'true'
+        run: |
+          curl --fail --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.PAVER_DEPLOY_TOKEN }}" \
+            --data-binary @paver \
+            "https://${{ vars.PAVER_SERVER_HOST }}/deploy/${{ steps.ticket.outputs.id }}"
