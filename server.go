@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/coder/websocket"
 	"gitlab.com/noop.nu/srv"
@@ -43,6 +44,7 @@ func serve() {
 		[]srv.Route{
 			{"/check", nil, H{"GET": _check}},
 			{"/commit", nil, H{"GET": _commit}},
+			{"/status", nil, H{"GET": _status}},
 			{"/socket", nil, H{"GET": _socket}},
 			{"/routines", []string{"*"}, H{"POST": _routines}},
 			{"/s3-presigned", []string{"*"}, H{"GET": _s3presigned_handler}},
@@ -199,8 +201,13 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if jsonstr, err := rtn.fn(sw(r, s), p); err == nil {
+	key := idempotency_key(q, p)
+
+	if jsonstr, err := run_deduped(key, q, sw(r, s), p, rtn.fn); err == nil {
 		fmt.Fprintf(w, jsonstr)
+	} else if errors.Is(err, ErrBusy) {
+		j, _ := json.Marshal(map[string]string{"error": err.Error()})
+		http.Error(w, string(j), 503)
 	} else {
 		j, _ := json.Marshal(map[string]string{"error": err.Error()})
 		http.Error(w, string(j), 400)

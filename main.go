@@ -9,7 +9,9 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"runtime"
 	"syscall"
+	"time"
 )
 
 var UUID_REGEXP = regexp.MustCompile("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}")
@@ -35,6 +37,8 @@ type filename = string
 func main() {
 	parse_flags()
 
+	routine_slots = make(chan struct{}, max_concurrent)
+
 	logger_setup()
 
 	serve()
@@ -46,6 +50,8 @@ func parse_flags() {
 	flag.StringVar(&logfilename, "log", "/tmp/paver.log", "")
 	flag.StringVar(&tmpdir, "tmpdir", "/tmp", "")
 	flag.StringVar(&buckets, "buckets", "/etc/paver-buckets.json", "")
+	flag.IntVar(&max_concurrent, "max-concurrent", runtime.NumCPU(), "Maximum number of routines to run concurrently")
+	flag.DurationVar(&queue_wait, "queue-wait", 10*time.Second, "How long to wait for a free concurrency slot before returning 503")
 
 	flag.Parse()
 }
