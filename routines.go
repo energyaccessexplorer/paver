@@ -2,21 +2,26 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
-func cleanup(keeps []filename, deletes []filename, w reporter, s3 s3config) {
+func cleanup(keeps []filename, deletes []filename, w reporter, s3 s3config) error {
 	w("CLEAN UP")
 
 	trash(deletes...)
 
 	for _, f := range keeps {
 		w("%s -> S3", f)
-		s3put(f, s3)
+		if !s3put(f, s3) {
+			return errors.New("s3 upload failed: " + f)
+		}
 		trash(f)
 	}
 
 	w("DONE")
+
+	return nil
 }
 
 func routine_admin_boundaries(w reporter, p routine_params) (string, error) {
@@ -50,11 +55,13 @@ func routine_admin_boundaries(w reporter, p routine_params) (string, error) {
 
 	info := vectors_info(rprjstripped)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{ids, rprjstripped},
 		[]filename{rprj, stripped},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jinfo, err := json.Marshal(info)
 	if err != nil {
@@ -94,11 +101,13 @@ func routine_simplify(w reporter, p routine_params) (string, error) {
 	}
 	w("%s <- *raster ids", ids)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{simpl, ids},
 		[]filename{},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(simpl), _uuid(ids))
 
@@ -166,11 +175,13 @@ func routine_clip_proximity(w reporter, p routine_params) (string, error) {
 	}
 	w("%s <- *proximity", prox)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{last, prox},
 		[]filename{stripped, rstr, refprj, simpl},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(last), _uuid(prox))
 
@@ -214,11 +225,13 @@ func routine_csv_points(w reporter, p routine_params) (string, error) {
 	}
 	w("%s <- *proximity", prox)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{clipped, prox},
 		[]filename{points, rstr, refprj},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jsonstr := fmt.Sprintf(`{ "vectors": "%s", "raster": "%s" }`, _uuid(clipped), _uuid(prox))
 
@@ -236,11 +249,13 @@ func routine_crop_raster(w reporter, p routine_params) (string, error) {
 	}
 	w("%s <- cropped", cropped)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{cropped},
 		[]filename{},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, _uuid(cropped))
 
@@ -256,7 +271,9 @@ func routine_subgeographies(w reporter, p routine_params) (string, error) {
 
 	for i, f := range r {
 		r[i] = _uuid(r[i])
-		cleanup([]filename{f}, []filename{}, w, p.S3)
+		if err := cleanup([]filename{f}, []filename{}, w, p.S3); err != nil {
+			return "", err
+		}
 	}
 
 	jsonstr, _ := json.Marshal(r)
@@ -273,7 +290,9 @@ func routine_vectors_extra_attributes(w reporter, p routine_params) (string, err
 
 	for i, f := range r {
 		r[i] = _uuid(r[i])
-		cleanup([]filename{f}, []filename{}, w, p.S3)
+		if err := cleanup([]filename{f}, []filename{}, w, p.S3); err != nil {
+			return "", err
+		}
 	}
 
 	jsonstr, _ := json.Marshal(r)
@@ -314,11 +333,13 @@ func routine_csv_raster(w reporter, p routine_params) (string, error) {
 	}
 	w("%s <- rasterised", rstr)
 
-	cleanup(
+	if err := cleanup(
 		[]filename{rstr},
 		[]filename{points, clipped, refprj},
 		w, p.S3,
-	)
+	); err != nil {
+		return "", err
+	}
 
 	jsonstr := fmt.Sprintf(`{ "raster": "%s" }`, _uuid(rstr))
 
