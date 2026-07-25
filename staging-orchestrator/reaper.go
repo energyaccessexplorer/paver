@@ -24,6 +24,9 @@ func (r *registry) reap_idle() {
 		if inst.err != nil {
 			continue // already failed; get_or_launch already cleaned this up
 		}
+		if inst.busy() {
+			continue
+		}
 		if inst.idle_for() > r.cfg.idleTimeout {
 			toReap = append(toReap, inst)
 			delete(r.m, ticket)
