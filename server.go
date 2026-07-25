@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/coder/websocket"
 	"gitlab.com/noop.nu/srv"
 	"io"
 	"net/http"
@@ -208,7 +209,7 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		if started && sid != "" {
 			go func() {
 				<-j.done
-				socket_destroy(sid, socket_get(sid), "routine finished")
+				socket_destroy(sid, socket_get(sid), websocket.StatusNormalClosure, "routine finished")
 			}()
 		}
 
@@ -227,7 +228,7 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	jsonstr, err := run_deduped(key, q, sw(sid), p, rtn.fn)
 	routine_respond(w, jsonstr, err)
 
-	defer socket_destroy(sid, socket_get(sid), "routine finished")
+	defer socket_destroy(sid, socket_get(sid), websocket.StatusNormalClosure, "routine finished")
 }
 
 func routine_respond(w http.ResponseWriter, jsonstr string, err error) {
