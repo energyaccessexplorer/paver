@@ -33,6 +33,9 @@ func proxy_handler(reg *registry) http.HandlerFunc {
 
 		r.URL.Path = rest // strip "/TICKET/paver", same as the shared /paver/ nginx location does
 
+		inst.active.Add(1)
+		defer inst.active.Add(-1)
+
 		if is_websocket_upgrade(r) {
 			hijack_and_pipe(w, r, inst.socket)
 			return
