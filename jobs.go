@@ -82,20 +82,20 @@ func idempotency_key(routine string, p routine_params) string {
 	return hex.EncodeToString(h[:])
 }
 
-// run_deduped either attaches to an already-running (or recently-finished,
-// within job_grace_period) identical job, or registers and runs a new one
-// behind the concurrency-limiting semaphore. Callers always get back the
-// same (jsonstr, err) shape a direct rtn.fn() call would have produced.
-func run_deduped(key string, routine_name string, w reporter, p routine_params, fn routine) (string, error) {
+// job_get_or_start returns the job registered under key — attaching to an
+// already-running (or recently-finished, within job_grace_period) identical
+// job — or registers a new one and runs it in a goroutine behind the
+// concurrency-limiting semaphore. started reports which of the two happened.
+// Callers either block on <-j.done or inspect the job non-blockingly.
+func job_get_or_start(key string, routine_name string, w reporter, p routine_params, fn routine) (j *job, started bool) {
 	jobs_mu.Lock()
-	if j, ok := jobs[key]; ok {
+	if existing, ok := jobs[key]; ok {
 		jobs_mu.Unlock()
 		logger.Printf("[JOB dedup] key=%s routine=%s attaching to existing job", key[:12], routine_name)
-		<-j.done
-		return j.result, j.err
+		return existing, false
 	}
 
-	j := &job{
+	j = &job{
 		key:     key,
 		routine: routine_name,
 		state:   job_running,
@@ -107,24 +107,38 @@ func run_deduped(key string, routine_name string, w reporter, p routine_params, 
 
 	logger.Printf("[JOB start] key=%s routine=%s dataseturl=%s", key[:12], routine_name, p.Dataset)
 
-	select {
-	case routine_slots <- struct{}{}:
-		defer func() { <-routine_slots }()
-	case <-time.After(queue_wait):
-		logger.Printf("[JOB queue-timeout] key=%s routine=%s slots=%d/%d", key[:12], routine_name, len(routine_slots), cap(routine_slots))
-		return finish_busy(j, key)
-	}
+	go func() {
+		select {
+		case routine_slots <- struct{}{}:
+			defer func() { <-routine_slots }()
+		case <-time.After(queue_wait):
+			logger.Printf("[JOB queue-timeout] key=%s routine=%s slots=%d/%d", key[:12], routine_name, len(routine_slots), cap(routine_slots))
+			finish_busy(j, key)
+			return
+		}
 
-	result, err := fn(w, p)
+		result, err := fn(w, p)
 
-	duration := time.Since(j.started)
-	if err != nil {
-		logger.Printf("[JOB error] key=%s routine=%s duration=%s err=%s", key[:12], routine_name, duration, err.Error())
-	} else {
-		logger.Printf("[JOB done] key=%s routine=%s duration=%s", key[:12], routine_name, duration)
-	}
+		duration := time.Since(j.started)
+		if err != nil {
+			logger.Printf("[JOB error] key=%s routine=%s duration=%s err=%s", key[:12], routine_name, duration, err.Error())
+		} else {
+			logger.Printf("[JOB done] key=%s routine=%s duration=%s", key[:12], routine_name, duration)
+		}
 
-	return finish(j, key, result, err)
+		finish(j, key, result, err)
+	}()
+
+	return j, true
+}
+
+// run_deduped runs (or attaches to) the job under key and blocks until it
+// finishes. Callers always get back the same (jsonstr, err) shape a direct
+// rtn.fn() call would have produced.
+func run_deduped(key string, routine_name string, w reporter, p routine_params, fn routine) (string, error) {
+	j, _ := job_get_or_start(key, routine_name, w, p, fn)
+	<-j.done
+	return j.result, j.err
 }
 
 // finish records a real outcome (success or a genuine routine error) and

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/coder/websocket"
 	"gitlab.com/noop.nu/srv"
 	"io"
 	"net/http"
@@ -70,9 +69,9 @@ func server_setup() {
 	fmt.Printf("Public key is: %s\n", pubkeyfile)
 }
 
-func sw(r *http.Request, k *websocket.Conn) reporter {
+func sw(sid string) reporter {
 	return func(s string, x ...any) string {
-		return socket_write(k, fmt.Sprintf(s+"\n", x...), r)
+		return socket_write(sid, fmt.Sprintf(s+"\n", x...))
 	}
 }
 
@@ -161,7 +160,6 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("socket_id")
-	s := socket_table[sid]
 
 	var jb map[string]interface{}
 
@@ -203,8 +201,39 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	key := idempotency_key(q, p)
 
-	if jsonstr, err := run_deduped(key, q, sw(r, s), p, rtn.fn); err == nil {
-		fmt.Fprintf(w, jsonstr)
+	if r.URL.Query().Has("async") {
+		j, started := job_get_or_start(key, q, sw(sid), p, rtn.fn)
+
+		// The job's starter closes the progress socket when the job ends;
+		// async requests return immediately and cannot own that lifecycle.
+		if started && sid != "" {
+			go func() {
+				<-j.done
+				socket_destroy(sid, socket_get(sid), "routine finished")
+			}()
+		}
+
+		select {
+		case <-j.done:
+			routine_respond(w, j.result, j.err)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			fmt.Fprintf(w, `{ "key": "%s", "state": "%s" }`, key, j.state)
+		}
+
+		return
+	}
+
+	jsonstr, err := run_deduped(key, q, sw(sid), p, rtn.fn)
+	routine_respond(w, jsonstr, err)
+
+	defer socket_destroy(sid, socket_get(sid), "routine finished")
+}
+
+func routine_respond(w http.ResponseWriter, jsonstr string, err error) {
+	if err == nil {
+		fmt.Fprint(w, jsonstr)
 	} else if errors.Is(err, ErrBusy) {
 		j, _ := json.Marshal(map[string]string{"error": err.Error()})
 		http.Error(w, string(j), 503)
@@ -212,8 +241,6 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		j, _ := json.Marshal(map[string]string{"error": err.Error()})
 		http.Error(w, string(j), 400)
 	}
-
-	defer socket_destroy(sid, s, "routine finished")
 }
 
 func _socket(w http.ResponseWriter, r *http.Request) {
