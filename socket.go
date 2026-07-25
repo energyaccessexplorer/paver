@@ -46,8 +46,9 @@ func socket_write(id string, m string) string {
 
 // socket_destroy closes s and drops it from the table — but only if the
 // table still points at s, so a reconnected (newer) socket under the same
-// id is never closed by an old owner's cleanup.
-func socket_destroy(id string, s *websocket.Conn, m string) {
+// id is never closed by an old owner's cleanup. NormalClosure means "job
+// finished, do not reconnect"; anything else tells the client to re-dial.
+func socket_destroy(id string, s *websocket.Conn, c websocket.StatusCode, m string) {
 	socket_table_mu.Lock()
 	if socket_table[id] == s {
 		delete(socket_table, id)
@@ -59,7 +60,7 @@ func socket_destroy(id string, s *websocket.Conn, m string) {
 		return
 	}
 
-	s.Close(websocket.StatusNormalClosure, m)
+	s.Close(c, m)
 }
 
 func socket_create(id string, w http.ResponseWriter, r *http.Request) {
@@ -79,6 +80,8 @@ func socket_create(id string, w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Minute)
 	defer cancel()
 
+	failed := make(chan struct{})
+
 	// Long GDAL phases produce no progress messages for many minutes;
 	// without traffic, browsers and proxies drop the silent connection.
 	go func() {
@@ -89,20 +92,25 @@ func socket_create(id string, w http.ResponseWriter, r *http.Request) {
 			select {
 			case <-ctx.Done():
 				return
+			case <-failed:
+				return
 			case <-t.C:
 				pctx, pcancel := context.WithTimeout(ctx, 10*time.Second)
 				err := s.Ping(pctx)
 				pcancel()
 
 				if err != nil {
-					cancel()
+					close(failed)
 					return
 				}
 			}
 		}
 	}()
 
-	<-ctx.Done()
-
-	socket_destroy(id, s, fmt.Sprintf("timed out - %v", ctx.Err()))
+	select {
+	case <-ctx.Done():
+		socket_destroy(id, s, websocket.StatusGoingAway, fmt.Sprintf("timed out - %v", ctx.Err()))
+	case <-failed:
+		socket_destroy(id, s, websocket.StatusInternalError, "ping failed")
+	}
 }
