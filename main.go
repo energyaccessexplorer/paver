@@ -37,6 +37,15 @@ type filename = string
 func main() {
 	parse_flags()
 
+	// Abort stalled HTTP transfers: GDAL would otherwise wait forever,
+	// wedging the job (and its concurrency slot) with it.
+	if os.Getenv("GDAL_HTTP_LOW_SPEED_TIME") == "" {
+		os.Setenv("GDAL_HTTP_LOW_SPEED_TIME", "60")
+	}
+	if os.Getenv("GDAL_HTTP_LOW_SPEED_LIMIT") == "" {
+		os.Setenv("GDAL_HTTP_LOW_SPEED_LIMIT", "1024")
+	}
+
 	routine_slots = make(chan struct{}, max_concurrent)
 
 	logger_setup()
