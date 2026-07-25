@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-const job_grace_period = 60 * time.Second
+// var, not const, so tests can shrink it instead of sleeping 60s.
+var job_grace_period = 60 * time.Second
 
 var ErrBusy = errors.New("server busy: too many concurrent paver jobs, try again shortly")
 

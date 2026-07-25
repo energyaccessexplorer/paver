@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 type H map[string]srv.Handler
@@ -65,8 +66,45 @@ func server_setup() {
 	}
 	t.Close()
 
+	// Failed or killed jobs leave intermediates behind; clear them on
+	// startup, then hourly (1h is far beyond the longest-running job).
+	tmpdir_clean(0)
+	go func() {
+		for range time.Tick(time.Hour) {
+			tmpdir_clean(time.Hour)
+		}
+	}()
+
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 	fmt.Printf("Public key is: %s\n", pubkeyfile)
+}
+
+// tmpdir_clean removes uuid-named intermediates from tmpdir — those are the
+// only files paver writes there; anything else (logs) is left alone. A
+// max_age of 0 removes them regardless of age.
+func tmpdir_clean(max_age time.Duration) {
+	entries, err := os.ReadDir(tmpdir)
+	if err != nil {
+		logger.Println("tmpdir_clean:", err.Error())
+		return
+	}
+
+	for _, e := range entries {
+		if UUID_REGEXP.FindString(e.Name()) != e.Name() {
+			continue
+		}
+
+		if max_age > 0 {
+			i, err := e.Info()
+			if err != nil || time.Since(i.ModTime()) < max_age {
+				continue
+			}
+		}
+
+		if err := os.Remove(tmpdir + "/" + e.Name()); err != nil {
+			logger.Println("tmpdir_clean:", err.Error())
+		}
+	}
 }
 
 func sw(sid string) reporter {
@@ -172,7 +210,7 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	if err = json.Unmarshal(body, &jb); err != nil {
 		logger.Println("_routines failed: json.Unmarshall to map[string]: \n", err.Error(), body)
-		http.Error(w, "Failed to parse request json", 500)
+		http.Error(w, "Failed to parse request json", 400)
 		return
 	}
 
@@ -185,7 +223,11 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	p := routine_params{}
 
-	s3bucket := jb["s3bucket"].(string)
+	s3bucket, ok := jb["s3bucket"].(string)
+	if !ok {
+		http.Error(w, "Invalid 's3bucket'", 400)
+		return
+	}
 	p.S3, _ = s3config_get(s3bucket)
 	if err != nil || p.S3.Key == "" {
 		http.Error(w, fmt.Sprintf("No such bucket: '%s'", s3bucket), 400)
