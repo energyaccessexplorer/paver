@@ -2,6 +2,9 @@ default: clean build
 
 -include .env
 
+# WebSocket Origin allowlist baked into the binary at build time (socket.go); .env overrides.
+PAVER_SOCKET_ACCEPT_PATTERN ?= *.energyaccessexplorer.org
+
 export PAVER_SERVER := ${PAVER_SERVER}
 export PAVER_SOCKET := ${PAVER_SOCKET}
 export PAVER_WORKDIR := ${PAVER_WORKDIR}
