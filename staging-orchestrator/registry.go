@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -26,6 +27,8 @@ type instance struct {
 	err   error         // set before ready is closed, on launch failure
 
 	exited chan struct{} // closed once the process has actually exited
+
+	active atomic.Int64 // in-flight proxied requests; a busy instance is never reaped
 
 	mu         sync.Mutex
 	lastAccess time.Time
@@ -127,6 +130,10 @@ func (i *instance) touch() {
 	i.mu.Unlock()
 }
 
+func (i *instance) busy() bool {
+	return i.active.Load() > 0
+}
+
 func (i *instance) idle_for() time.Duration {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -204,6 +211,9 @@ func (r *registry) evict_over_cap_locked() {
 			if inst.err != nil {
 				continue
 			}
+			if inst.busy() {
+				continue
+			}
 			if lru == nil || inst.idle_for() > lru.idle_for() {
 				lru = inst
 				lruTicket = ticket
@@ -211,7 +221,7 @@ func (r *registry) evict_over_cap_locked() {
 		}
 
 		if lru == nil {
-			return // nothing evictable right now (all still launching)
+			return // nothing evictable right now (all still launching or busy)
 		}
 
 		delete(r.m, lruTicket)

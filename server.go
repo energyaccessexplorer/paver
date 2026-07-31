@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/coder/websocket"
 	"gitlab.com/noop.nu/srv"
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 type H map[string]srv.Handler
@@ -42,6 +44,7 @@ func serve() {
 		socket,
 		[]srv.Route{
 			{"/check", nil, H{"GET": _check}},
+			{"/status", nil, H{"GET": _status}},
 			{"/socket", nil, H{"GET": _socket}},
 			{"/routines", []string{"*"}, H{"POST": _routines}},
 			{"/s3-presigned", []string{"*"}, H{"GET": _s3presigned_handler}},
@@ -63,13 +66,50 @@ func server_setup() {
 	}
 	t.Close()
 
+	// Failed or killed jobs leave intermediates behind; clear them on
+	// startup, then hourly (1h is far beyond the longest-running job).
+	tmpdir_clean(0)
+	go func() {
+		for range time.Tick(time.Hour) {
+			tmpdir_clean(time.Hour)
+		}
+	}()
+
 	fmt.Printf("Temporary directory is '%s'\n", tmpdir)
 	fmt.Printf("Public key is: %s\n", pubkeyfile)
 }
 
-func sw(r *http.Request, k *websocket.Conn) reporter {
+// tmpdir_clean removes uuid-named intermediates from tmpdir — those are the
+// only files paver writes there; anything else (logs) is left alone. A
+// max_age of 0 removes them regardless of age.
+func tmpdir_clean(max_age time.Duration) {
+	entries, err := os.ReadDir(tmpdir)
+	if err != nil {
+		logger.Println("tmpdir_clean:", err.Error())
+		return
+	}
+
+	for _, e := range entries {
+		if UUID_REGEXP.FindString(e.Name()) != e.Name() {
+			continue
+		}
+
+		if max_age > 0 {
+			i, err := e.Info()
+			if err != nil || time.Since(i.ModTime()) < max_age {
+				continue
+			}
+		}
+
+		if err := os.Remove(tmpdir + "/" + e.Name()); err != nil {
+			logger.Println("tmpdir_clean:", err.Error())
+		}
+	}
+}
+
+func sw(sid string) reporter {
 	return func(s string, x ...any) string {
-		return socket_write(k, fmt.Sprintf(s+"\n", x...), r)
+		return socket_write(sid, fmt.Sprintf(s+"\n", x...))
 	}
 }
 
@@ -158,7 +198,6 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sid := r.URL.Query().Get("socket_id")
-	s := socket_table[sid]
 
 	var jb map[string]interface{}
 
@@ -171,7 +210,7 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	if err = json.Unmarshal(body, &jb); err != nil {
 		logger.Println("_routines failed: json.Unmarshall to map[string]: \n", err.Error(), body)
-		http.Error(w, "Failed to parse request json", 500)
+		http.Error(w, "Failed to parse request json", 400)
 		return
 	}
 
@@ -184,7 +223,11 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 
 	p := routine_params{}
 
-	s3bucket := jb["s3bucket"].(string)
+	s3bucket, ok := jb["s3bucket"].(string)
+	if !ok {
+		http.Error(w, "Invalid 's3bucket'", 400)
+		return
+	}
 	p.S3, _ = s3config_get(s3bucket)
 	if err != nil || p.S3.Key == "" {
 		http.Error(w, fmt.Sprintf("No such bucket: '%s'", s3bucket), 400)
@@ -198,14 +241,48 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if jsonstr, err := rtn.fn(sw(r, s), p); err == nil {
-		fmt.Fprintf(w, jsonstr)
+	key := idempotency_key(q, p)
+
+	if r.URL.Query().Has("async") {
+		j, started := job_get_or_start(key, q, sw(sid), p, rtn.fn)
+
+		// The job's starter closes the progress socket when the job ends;
+		// async requests return immediately and cannot own that lifecycle.
+		if started && sid != "" {
+			go func() {
+				<-j.done
+				socket_destroy(sid, socket_get(sid), websocket.StatusNormalClosure, "routine finished")
+			}()
+		}
+
+		select {
+		case <-j.done:
+			routine_respond(w, j.result, j.err)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			fmt.Fprintf(w, `{ "key": "%s", "state": "%s" }`, key, j.state)
+		}
+
+		return
+	}
+
+	jsonstr, err := run_deduped(key, q, sw(sid), p, rtn.fn)
+	routine_respond(w, jsonstr, err)
+
+	defer socket_destroy(sid, socket_get(sid), websocket.StatusNormalClosure, "routine finished")
+}
+
+func routine_respond(w http.ResponseWriter, jsonstr string, err error) {
+	if err == nil {
+		fmt.Fprint(w, jsonstr)
+	} else if errors.Is(err, ErrBusy) {
+		j, _ := json.Marshal(map[string]string{"error": err.Error()})
+		http.Error(w, string(j), 503)
 	} else {
 		j, _ := json.Marshal(map[string]string{"error": err.Error()})
 		http.Error(w, string(j), 400)
 	}
-
-	defer socket_destroy(sid, s, "routine finished")
 }
 
 func _socket(w http.ResponseWriter, r *http.Request) {
