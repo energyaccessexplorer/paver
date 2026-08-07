@@ -1,9 +1,6 @@
 name: PRODUCTION DEPLOY
 
-# Builds the production paver binary and ships it to eae-paver, then
-# restarts paver.service. Deploy user (paverci) is a dedicated,
-# low-privilege account restricted via sudoers to running exactly one
-# fixed install+restart script (/usr/local/sbin/paver-deploy.sh on the VPS).
+# Builds paver and ships it to eae-paver via the restricted paverci user.
 
 on:
   push:
@@ -33,6 +30,7 @@ jobs:
             -X main.SOCKET_ACCEPT_PATTERN=${{ vars.PAVER_SOCKET_ACCEPT_PATTERN }} \
             -X main.BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o paver .
 
+      # PAVER_PROD_HOST: raw box hostname. PAVER_SERVER_HOST (Verify step): public domain.
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
@@ -54,4 +52,4 @@ jobs:
         run: |
           sleep 3
           curl --fail --silent --show-error \
-            https://${{ vars.PAVER_PROD_HOST }}/build-date
+            https://${{ vars.PAVER_SERVER_HOST }}/paver/build-date
