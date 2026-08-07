@@ -42,6 +42,7 @@ func serve() {
 		socket,
 		[]srv.Route{
 			{"/check", nil, H{"GET": _check}},
+			{"/commit", nil, H{"GET": _commit}},
 			{"/socket", nil, H{"GET": _socket}},
 			{"/routines", []string{"*"}, H{"POST": _routines}},
 			{"/s3-presigned", []string{"*"}, H{"GET": _s3presigned_handler}},
@@ -215,6 +216,10 @@ func _socket(w http.ResponseWriter, r *http.Request) {
 
 func _check(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "TJA!")
+}
+
+func _commit(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, COMMIT_SHA)
 }
 
 func _s3presigned_handler(w http.ResponseWriter, r *http.Request) {
