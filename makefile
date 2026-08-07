@@ -34,7 +34,8 @@ build:
 	CGO_LDFLAGS="-L/usr/local/lib -lgdal" \
 	CGO_CFLAGS="-I/usr/local/include -I/usr/include/gdal" \
 	go build -ldflags "-s \
-		-X main.SOCKET_ACCEPT_PATTERN=${PAVER_SOCKET_ACCEPT_PATTERN}"
+		-X main.SOCKET_ACCEPT_PATTERN=${PAVER_SOCKET_ACCEPT_PATTERN} \
+		-X main.BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 	envsubst <paver.service-tmpl >paver.service
 	cat paver.service

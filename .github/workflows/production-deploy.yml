@@ -1,0 +1,57 @@
+name: PRODUCTION DEPLOY
+
+# Builds the production paver binary and ships it to eae-paver, then
+# restarts paver.service. Deploy user (paverci) is a dedicated,
+# low-privilege account restricted via sudoers to running exactly one
+# fixed install+restart script (/usr/local/sbin/paver-deploy.sh on the VPS).
+
+on:
+  push:
+    branches: [ trunk ]
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Install GDAL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgdal-dev gdal-bin pkg-config
+
+      - name: Build
+        run: |
+          export CGO_LDFLAGS="$(gdal-config --libs)"
+          export CGO_CFLAGS="$(gdal-config --cflags)"
+          go build -ldflags "-s \
+            -X main.SOCKET_ACCEPT_PATTERN=${{ vars.PAVER_SOCKET_ACCEPT_PATTERN }} \
+            -X main.BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)" -o paver .
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.PAVER_PROD_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ vars.PAVER_PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Ship binary
+        run: |
+          scp -i ~/.ssh/deploy_key paver \
+            paverci@${{ vars.PAVER_PROD_HOST }}:incoming/paver
+
+      - name: Install + restart
+        run: |
+          ssh -i ~/.ssh/deploy_key paverci@${{ vars.PAVER_PROD_HOST }} \
+            sudo /usr/local/sbin/paver-deploy.sh
+
+      - name: Verify
+        run: |
+          sleep 3
+          curl --fail --silent --show-error \
+            https://${{ vars.PAVER_PROD_HOST }}/build-date
