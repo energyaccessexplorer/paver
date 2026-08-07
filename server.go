@@ -42,7 +42,7 @@ func serve() {
 		socket,
 		[]srv.Route{
 			{"/check", nil, H{"GET": _check}},
-			{"/build-date", nil, H{"GET": _build_date}},
+			{"/commit", nil, H{"GET": _commit}},
 			{"/socket", nil, H{"GET": _socket}},
 			{"/routines", []string{"*"}, H{"POST": _routines}},
 			{"/s3-presigned", []string{"*"}, H{"GET": _s3presigned_handler}},
@@ -218,8 +218,8 @@ func _check(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "TJA!")
 }
 
-func _build_date(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, BUILD_DATE)
+func _commit(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, COMMIT_SHA)
 }
 
 func _s3presigned_handler(w http.ResponseWriter, r *http.Request) {

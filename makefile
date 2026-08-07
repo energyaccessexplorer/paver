@@ -35,7 +35,7 @@ build:
 	CGO_CFLAGS="-I/usr/local/include -I/usr/include/gdal" \
 	go build -ldflags "-s \
 		-X main.SOCKET_ACCEPT_PATTERN=${PAVER_SOCKET_ACCEPT_PATTERN} \
-		-X main.BUILD_DATE=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)"
+		-X main.COMMIT_SHA=$(shell git rev-parse --short HEAD)"
 
 	envsubst <paver.service-tmpl >paver.service
 	cat paver.service

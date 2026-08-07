@@ -24,14 +24,11 @@ jobs:
 
       - name: Build
         run: |
-          BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          echo "BUILD_DATE=$BUILD_DATE" >> "$GITHUB_ENV"
-
           export CGO_LDFLAGS="$(gdal-config --libs)"
           export CGO_CFLAGS="$(gdal-config --cflags)"
           go build -ldflags "-s \
             -X main.SOCKET_ACCEPT_PATTERN=${{ vars.PAVER_SOCKET_ACCEPT_PATTERN }} \
-            -X main.BUILD_DATE=$BUILD_DATE" -o paver .
+            -X main.COMMIT_SHA=${GITHUB_SHA:0:7}" -o paver .
 
       # PAVER_PROD_HOST: raw box hostname. PAVER_SERVER_HOST (Verify step): public domain.
       - name: Set up SSH
@@ -53,10 +50,11 @@ jobs:
 
       - name: Verify
         run: |
-          url="https://${{ vars.PAVER_SERVER_HOST }}/paver/build-date"
+          url="https://${{ vars.PAVER_SERVER_HOST }}/paver/commit"
+          want="${GITHUB_SHA:0:7}"
           for i in $(seq 1 10); do
-            got="$(curl --fail --silent --show-error "$url")" && [ "$got" = "$BUILD_DATE" ] && exit 0
+            got="$(curl --fail --silent --show-error "$url")" && [ "$got" = "$want" ] && exit 0
             sleep 2
           done
-          echo "expected $BUILD_DATE, got '$got'" >&2
+          echo "expected $want, got '$got'" >&2
           exit 1
