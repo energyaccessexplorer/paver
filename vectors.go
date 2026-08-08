@@ -216,6 +216,8 @@ func vectors_clip_parallel(in filename, container filename, k int, w reporter) (
 
 		l.ResetReading()
 		for feat := l.NextFeature(); feat != nil; feat = l.NextFeature() {
+			// drop the per-chunk FID so merged output matches a serial clip
+			feat.SetFID(-1)
 			res.Create(*feat)
 			feat.Destroy()
 		}
