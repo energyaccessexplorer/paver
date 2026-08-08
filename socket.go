@@ -41,6 +41,8 @@ func socket_write(id string, m string) string {
 		logger.Println("socket_write:", err.Error())
 	}
 
+	logger.Println(m)
+
 	return m
 }
 

@@ -241,6 +241,7 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, res
 		"-t_srs", "EPSG:3857",
 		"-tr", strconv.Itoa(res), strconv.Itoa(res),
 		"-r", rc.Resample,
+		"-wo", "NUM_THREADS=ALL_CPUS",
 	}
 
 	release := capture()
@@ -263,6 +264,7 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, res
 		"-t_srs", "EPSG:3857",
 		"-ot", rc.Numbertype,
 		"-dstnodata", strconv.Itoa(rc.Nodata),
+		"-wo", "NUM_THREADS=ALL_CPUS",
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",

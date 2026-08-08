@@ -50,6 +50,11 @@ func main() {
 		os.Setenv("GDAL_HTTP_LOW_SPEED_LIMIT", "1024")
 	}
 
+	// Threads for GTiff block compression and warp kernels.
+	if os.Getenv("GDAL_NUM_THREADS") == "" {
+		os.Setenv("GDAL_NUM_THREADS", "ALL_CPUS")
+	}
+
 	routine_slots = make(chan struct{}, max_concurrent)
 
 	logger_setup()
