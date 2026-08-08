@@ -27,8 +27,10 @@ import (
 	"github.com/energyaccessexplorer/gdal"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 func vectors_strip(in filename, fields []string, w reporter) (filename, error) {
@@ -98,12 +100,8 @@ func vectors_reproject(in filename, epsg int, w reporter) (filename, error) {
 func vectors_clip(in filename, container filename, w reporter) (filename, error) {
 	w("VECTORS CLIP")
 
-	out := _filename()
-
 	f := gdal.OpenDataSource(in, 0)
 	g := gdal.OpenDataSource(container, 0)
-	defer f.Destroy()
-	defer g.Destroy()
 
 	src := f.LayerByIndex(0)
 	tar := g.LayerByIndex(0)
@@ -114,10 +112,24 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	ct, _ := tar.FeatureCount(true)
 	w("	container feature count: %d", ct)
 	if ct > 1 {
+		f.Destroy()
+		g.Destroy()
 		return "", errors.New(fmt.Sprintf(
 			"	The container file has %d features. It should have 1: the contour of the geography. \n"+
 				"This is a configuration error on the geography.", ct))
 	}
+
+	k := min(runtime.NumCPU(), 8)
+	if tt >= 2000 && k > 1 {
+		f.Destroy()
+		g.Destroy()
+		return vectors_clip_parallel(in, container, k, w)
+	}
+
+	defer f.Destroy()
+	defer g.Destroy()
+
+	out := _filename()
 
 	drv := gdal.OGRDriverByName("GeoJSON")
 	ds, _ := drv.Create(out, []string{})
@@ -149,6 +161,133 @@ func vectors_clip(in filename, container filename, w reporter) (filename, error)
 	w("	result feature count: %d", rt)
 
 	return out, err
+}
+
+// vectors_clip_parallel clips strides of the source features concurrently —
+// each worker gets its own dataset handles, since GDAL is re-entrant but not
+// thread-safe on shared instances — and merges the chunks in order.
+func vectors_clip_parallel(in filename, container filename, k int, w reporter) (filename, error) {
+	w("	clipping in %d chunks...", k)
+
+	outs := make([]filename, k)
+	errs := make([]error, k)
+
+	var wg sync.WaitGroup
+	for c := 0; c < k; c++ {
+		wg.Add(1)
+		go func(c int) {
+			defer wg.Done()
+			outs[c], errs[c] = vectors_clip_chunk(in, container, c, k)
+			if errs[c] == nil {
+				w("	clip chunk %d/%d done", c+1, k)
+			}
+		}(c)
+	}
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			trash(outs...)
+			return "", err
+		}
+	}
+
+	out := _filename()
+
+	drv := gdal.OGRDriverByName("GeoJSON")
+	ds, _ := drv.Create(out, []string{})
+
+	s := gdal.CreateSpatialReference("")
+	s.FromEPSG(4326)
+
+	var res gdal.Layer
+	for i, c := range outs {
+		h := gdal.OpenDataSource(c, 0)
+		l := h.LayerByIndex(0)
+
+		if i == 0 {
+			res = ds.CreateLayer("Layer0", s, l.Type(), []string{})
+
+			def := l.Definition()
+			for j := 0; j < def.FieldCount(); j++ {
+				res.CreateField(def.FieldDefinition(j), true)
+			}
+		}
+
+		l.ResetReading()
+		for feat := l.NextFeature(); feat != nil; feat = l.NextFeature() {
+			res.Create(*feat)
+			feat.Destroy()
+		}
+
+		h.Destroy()
+	}
+
+	ds.Destroy()
+	trash(outs...)
+
+	h := gdal.OpenDataSource(out, 0)
+	defer h.Destroy()
+
+	rt, _ := h.LayerByIndex(0).FeatureCount(true)
+	w("	result feature count: %d", rt)
+
+	return out, nil
+}
+
+func vectors_clip_chunk(in filename, container filename, c int, k int) (filename, error) {
+	f := gdal.OpenDataSource(in, 0)
+	defer f.Destroy()
+
+	g := gdal.OpenDataSource(container, 0)
+	defer g.Destroy()
+
+	src := f.LayerByIndex(0)
+	tar := g.LayerByIndex(0)
+
+	s := gdal.CreateSpatialReference("")
+	s.FromEPSG(4326)
+
+	mem, _ := gdal.OGRDriverByName("Memory").Create("", []string{})
+	defer mem.Destroy()
+
+	ml := mem.CreateLayer("chunk", s, src.Type(), []string{})
+
+	def := src.Definition()
+	for j := 0; j < def.FieldCount(); j++ {
+		ml.CreateField(def.FieldDefinition(j), true)
+	}
+
+	n, _ := src.FeatureCount(true)
+	for i := 0; i < n; i++ {
+		if i%k != c {
+			continue
+		}
+
+		feat := src.Feature(int64(i))
+		if err := ml.Create(feat); err != nil {
+			feat.Destroy()
+			return "", err
+		}
+		feat.Destroy()
+	}
+
+	out := _filename()
+
+	drv := gdal.OGRDriverByName("GeoJSON")
+	ds, _ := drv.Create(out, []string{})
+
+	res := ds.CreateLayer("Layer0", s, src.Type(), []string{})
+
+	err := ml.Clip(tar, res, []string{})
+	ds.Destroy()
+
+	if err != nil {
+		trash(out)
+		return "", err
+	}
+
+	return out, nil
 }
 
 func vectors_simplify(in filename, s float32, w reporter) (filename, error) {
