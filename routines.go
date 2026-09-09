@@ -243,7 +243,7 @@ func routine_crop_raster(w reporter, p routine_params) (string, error) {
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
-	cropped, err := raster_crop(in, p.Base, p.Reference, p.Config, p.Resolution, w)
+	cropped, err := raster_crop(in, p.Base, p.Reference, p.Config, w)
 	if err != nil {
 		return "", err
 	}
