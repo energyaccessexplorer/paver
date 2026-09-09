@@ -7,6 +7,7 @@ import (
 	"github.com/coder/websocket"
 	"gitlab.com/noop.nu/srv"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -39,6 +40,30 @@ type server_routine struct {
 
 func serve() {
 	server_setup()
+
+	// Optional loopback TCP listener, enabled with PAVER_TCP_ADDR (e.g.
+	// "127.0.0.1:8090"). Sandboxed agent runtimes cannot connect to unix
+	// sockets, so this exposes the same handlers over TCP for local re-paving.
+	// Loopback-only and opt-in; no auth (the unix socket path keeps srv's JWT
+	// check).
+	if tcp := os.Getenv("PAVER_TCP_ADDR"); tcp != "" {
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/check", _check)
+			mux.HandleFunc("/commit", _commit)
+			mux.HandleFunc("/status", _status)
+			mux.HandleFunc("/routines", _routines)
+
+			l, err := net.Listen("tcp", tcp)
+			if err != nil {
+				logger.Println("tcp listen:", err.Error())
+				return
+			}
+
+			logger.Println("Listening on TCP:", tcp)
+			panic(http.Serve(l, mux))
+		}()
+	}
 
 	srv.Run(
 		socket,

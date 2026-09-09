@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"os/exec"
 	"strconv"
 )
 
@@ -203,7 +204,7 @@ func raster_zeros(in filename, res int, w reporter) (filename, error) {
 }
 
 func raster_crop(in filename, base filename, ref filename, rc raster_config, res int, w reporter) (filename, error) {
-	w("RASTER CROP")
+	w("RASTER CROP (multi-band)")
 
 	r, err := gdal.OpenEx(base, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
@@ -229,57 +230,86 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, res
 	y := r.RasterYSize()
 
 	w(" raster size: (%d,%d)", x, y)
-	w(" numbertype: %s", rc.Numbertype)
 	w(" nodata: %d", rc.Nodata)
-	w(" resampling method: %s", rc.Resample)
-	w(" resolution: %d", res)
+	w(" display resampling (band 1): %s", rc.Resample)
 
-	r_out := _filename()
+	// The output is a single, uniformly-typed Float32 raster with three bands:
+	//   1 = display value (configured resampling, e.g. near)
+	//   2 = area-weighted sum (conservative: subpixels of a cell add to its value)
+	//   3 = area-weighted average
+	// sum/average must be Float32 or their fractional contributions would be
+	// rounded away (the EAE-500 Rainfed bug). Band 1 shares the type so the three
+	// bands can live in one GeoTIFF.
+	warp := func(method string) (filename, error) {
+		band_out := _filename()
 
-	r_opts := []string{
-		"-of", "GTiff",
-		"-t_srs", "EPSG:3857",
-		"-tr", strconv.Itoa(res), strconv.Itoa(res),
-		"-r", rc.Resample,
-		"-wo", "NUM_THREADS=ALL_CPUS",
+		opts := []string{
+			"-of", "GTiff",
+			"-t_srs", "EPSG:3857",
+			"-ts", strconv.Itoa(x), strconv.Itoa(y),
+			"-r", method,
+			"-ot", "Float32",
+			"-dstnodata", strconv.Itoa(rc.Nodata),
+			"-cutline", ref,
+			"-crop_to_cutline",
+			"-cl", layer,
+			"-wo", "NUM_THREADS=ALL_CPUS",
+			"-co", "COMPRESS=DEFLATE",
+			"-co", "PREDICTOR=1",
+			"-co", "ZLEVEL=9",
+		}
+
+		release := capture()
+		dest, err := gdal.Warp(band_out, nil, []gdal.Dataset{src}, opts)
+
+		result := release()
+		if err != nil {
+			return "", errors.New(result)
+		}
+		dest.Close()
+
+		return band_out, nil
 	}
 
-	release := capture()
-	r_src, err := gdal.Warp(r_out, nil, []gdal.Dataset{src}, r_opts)
-
-	result := release()
+	b1, err := warp(rc.Resample)
 	if err != nil {
-		err = errors.New(result)
-		w(err.Error())
+		w(" band 1 (%s) failed: %s", rc.Resample, err.Error())
 		return "", err
 	}
-	defer r_src.Close()
+	w(" band 1 (%s) done", rc.Resample)
 
-	c_opts := []string{
-		"-cutline", ref,
-		"-crop_to_cutline",
-		"-cl", layer,
+	b2, err := warp("sum")
+	if err != nil {
+		w(" band 2 (sum) failed: %s", err.Error())
+		return "", err
+	}
+	w(" band 2 (sum) done")
+
+	b3, err := warp("average")
+	if err != nil {
+		w(" band 3 (average) failed: %s", err.Error())
+		return "", err
+	}
+	w(" band 3 (average) done")
+
+	// Stack the three single-band warps into one 3-band GeoTIFF.
+	vrt := _filename() + ".vrt"
+	cmd := exec.Command("gdalbuildvrt", "-separate", vrt, b1, b2, b3)
+	if buf, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("gdalbuildvrt: %v: %s", err, buf)
+	}
+
+	cmd = exec.Command("gdal_translate",
 		"-of", "GTiff",
-		"-ts", strconv.Itoa(x), strconv.Itoa(y),
-		"-t_srs", "EPSG:3857",
-		"-ot", rc.Numbertype,
-		"-dstnodata", strconv.Itoa(rc.Nodata),
-		"-wo", "NUM_THREADS=ALL_CPUS",
 		"-co", "COMPRESS=DEFLATE",
 		"-co", "PREDICTOR=1",
 		"-co", "ZLEVEL=9",
+		vrt, out)
+	if buf, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("gdal_translate: %v: %s", err, buf)
 	}
 
-	release1 := capture()
-	dest, err := gdal.Warp(out, nil, []gdal.Dataset{r_src}, c_opts)
-
-	result1 := release1()
-	if err != nil {
-		err = errors.New(result1)
-		w(err.Error())
-		return "", err
-	}
-	defer dest.Close()
+	trash(b1, b2, b3, vrt)
 
 	return out, nil
 }
