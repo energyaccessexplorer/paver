@@ -10,13 +10,16 @@ import (
 	"regexp"
 )
 
-var deploy_path_re = regexp.MustCompile(`^/deploy/([A-Z]+-[0-9]+)$`)
+// POST /deploy/<TICKET> ships the paver binary, POST /deploy/<TICKET>/departer
+// the departer one; both land as <tickets-path>/<TICKET>/<service>.
+var deploy_path_re = regexp.MustCompile(`^/deploy/([A-Z]+-[0-9]+)(/(paver|departer))?$`)
 
 // Sanity cap, not a tight budget.
 const max_binary_size = 200 << 20
 
-// POST /deploy/<TICKET>, binary as the body. Writes atomically (temp file
-// + rename) and kills any already-running instance for the ticket.
+// POST /deploy/<TICKET>[/<service>], binary as the body. Writes atomically
+// (temp file + rename) and kills any already-running instance of that service
+// for the ticket.
 func deploy_handler(reg *registry, deployToken string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -31,10 +34,13 @@ func deploy_handler(reg *registry, deployToken string) http.HandlerFunc {
 
 		m := deploy_path_re.FindStringSubmatch(r.URL.Path)
 		if m == nil {
-			http.Error(w, "expected /deploy/<TICKET>", http.StatusBadRequest)
+			http.Error(w, "expected /deploy/<TICKET>[/<service>]", http.StatusBadRequest)
 			return
 		}
-		ticket := m[1]
+		ticket, service := m[1], servicePaver
+		if m[3] != "" {
+			service = m[3]
+		}
 
 		dir := filepath.Join(reg.cfg.ticketsPath, ticket)
 		if err := os.MkdirAll(dir, 0755); err != nil {
@@ -42,7 +48,7 @@ func deploy_handler(reg *registry, deployToken string) http.HandlerFunc {
 			return
 		}
 
-		final := filepath.Join(dir, "paver")
+		final := filepath.Join(dir, service)
 		tmp := final + ".upload"
 
 		f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
@@ -75,12 +81,12 @@ func deploy_handler(reg *registry, deployToken string) http.HandlerFunc {
 			return
 		}
 
-		logger.Printf("[DEPLOY] ticket=%s bytes=%d", ticket, n)
+		logger.Printf("[DEPLOY] ticket=%s service=%s bytes=%d", ticket, service, n)
 
-		reg.kill_if_running(ticket, "redeployed")
+		reg.kill_if_running(ticket, service, "redeployed")
 
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, "deployed %s (%d bytes)\n", ticket, n)
+		fmt.Fprintf(w, "deployed %s/%s (%d bytes)\n", ticket, service, n)
 	}
 }
 
