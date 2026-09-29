@@ -12,16 +12,18 @@ import (
 )
 
 type config struct {
-	socket          string
-	ticketsPath     string
-	runDir          string
-	pubkey          string
-	buckets         string
-	deployToken     string
-	deployTokenFile string
-	idleTimeout     time.Duration
-	startupTimeout  time.Duration
-	maxInstances    int
+	socket            string
+	ticketsPath       string
+	runDir            string
+	pubkey            string
+	buckets           string
+	deployToken       string
+	deployTokenFile   string
+	idleTimeout       time.Duration
+	startupTimeout    time.Duration
+	maxInstances      int
+	departerBuilds    string
+	departerWorkspace string
 }
 
 var (
@@ -80,6 +82,8 @@ func parse_flags() *config {
 	flag.DurationVar(&cfg.idleTimeout, "idle-timeout", 30*time.Minute, "Kill a per-ticket instance after this much time with no requests")
 	flag.DurationVar(&cfg.startupTimeout, "startup-timeout", 10*time.Second, "How long to wait for a newly-launched instance to become ready")
 	flag.IntVar(&cfg.maxInstances, "max-instances", 5, "Maximum number of concurrently-running per-ticket instances (LRU-evicted beyond this)")
+	flag.StringVar(&cfg.departerBuilds, "departer-builds-path", "/var/www/departer-tickets", "Directory for per-ticket departer build output (logs + zips; served at /<TICKET>/departer/builds/)")
+	flag.StringVar(&cfg.departerWorkspace, "departer-workspace", "/var/cache/offroad", "Offroad workspace the per-ticket departer runs its build in")
 
 	flag.Parse()
 

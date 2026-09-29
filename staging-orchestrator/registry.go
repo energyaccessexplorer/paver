@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -17,11 +18,21 @@ import (
 
 var errNotFound = errors.New("no staging build for this ticket")
 
+const (
+	servicePaver    = "paver"
+	serviceDeparter = "departer"
+)
+
+// Instances are keyed by "<TICKET>/<service>": a ticket can have a paver and a
+// departer instance at the same time, each with its own socket and lifetime.
+func instance_key(ticket, service string) string { return ticket + "/" + service }
+
 type instance struct {
-	ticket string
-	cmd    *exec.Cmd
-	socket string
-	dir    string
+	ticket  string
+	service string
+	cmd     *exec.Cmd
+	socket  string
+	dir     string
 
 	ready chan struct{} // closed once launch has succeeded or failed
 	err   error         // set before ready is closed, on launch failure
@@ -42,9 +53,11 @@ type registry struct {
 
 // Launches on demand; concurrent callers for the same cold ticket share
 // one launch (single-flight) rather than each starting their own process.
-func (r *registry) get_or_launch(ticket string) (*instance, error) {
+func (r *registry) get_or_launch(ticket, service string) (*instance, error) {
+	key := instance_key(ticket, service)
+
 	r.mu.Lock()
-	if inst, ok := r.m[ticket]; ok {
+	if inst, ok := r.m[key]; ok {
 		r.mu.Unlock()
 		<-inst.ready
 		if inst.err != nil {
@@ -54,45 +67,45 @@ func (r *registry) get_or_launch(ticket string) (*instance, error) {
 		return inst, nil
 	}
 
-	binary := filepath.Join(r.cfg.ticketsPath, ticket, "paver")
+	binary := filepath.Join(r.cfg.ticketsPath, ticket, service)
 	if _, err := os.Stat(binary); err != nil {
 		r.mu.Unlock()
 		return nil, errNotFound
 	}
 
-	inst := &instance{ticket: ticket, ready: make(chan struct{})}
-	r.m[ticket] = inst
+	inst := &instance{ticket: ticket, service: service, ready: make(chan struct{})}
+	r.m[key] = inst
 	r.evict_over_cap_locked()
 	r.mu.Unlock()
 
-	logger.Printf("[INSTANCE start] ticket=%s", ticket)
+	logger.Printf("[INSTANCE start] ticket=%s service=%s", ticket, service)
 
 	if err := r.launch(inst); err != nil {
 		inst.err = err
 		close(inst.ready)
 
 		r.mu.Lock()
-		if r.m[ticket] == inst {
-			delete(r.m, ticket)
+		if r.m[key] == inst {
+			delete(r.m, key)
 		}
 		r.mu.Unlock()
 
-		logger.Printf("[INSTANCE start-failed] ticket=%s err=%s", ticket, err.Error())
+		logger.Printf("[INSTANCE start-failed] ticket=%s service=%s err=%s", ticket, service, err.Error())
 		return nil, err
 	}
 
 	inst.touch()
 	close(inst.ready)
 
-	logger.Printf("[INSTANCE ready] ticket=%s socket=%s", ticket, inst.socket)
+	logger.Printf("[INSTANCE ready] ticket=%s service=%s socket=%s", ticket, service, inst.socket)
 
 	// deregister on unexpected crash so the next request relaunches cleanly
 	go func() {
 		<-inst.exited
 		r.mu.Lock()
-		if r.m[ticket] == inst {
-			delete(r.m, ticket)
-			logger.Printf("[INSTANCE crashed] ticket=%s", ticket)
+		if r.m[key] == inst {
+			delete(r.m, key)
+			logger.Printf("[INSTANCE crashed] ticket=%s service=%s", ticket, service)
 		}
 		r.mu.Unlock()
 	}()
@@ -101,9 +114,11 @@ func (r *registry) get_or_launch(ticket string) (*instance, error) {
 }
 
 // No-op if the ticket is still cold-starting; the reaper cleans that up later.
-func (r *registry) kill_if_running(ticket string, reason string) {
+func (r *registry) kill_if_running(ticket, service string, reason string) {
+	key := instance_key(ticket, service)
+
 	r.mu.Lock()
-	inst, ok := r.m[ticket]
+	inst, ok := r.m[key]
 	if !ok {
 		r.mu.Unlock()
 		return
@@ -116,7 +131,7 @@ func (r *registry) kill_if_running(ticket string, reason string) {
 		return
 	}
 
-	delete(r.m, ticket)
+	delete(r.m, key)
 	r.mu.Unlock()
 
 	if inst.err == nil {
@@ -149,19 +164,46 @@ func (r *registry) launch(inst *instance) error {
 	}
 
 	inst.dir = dir
-	inst.socket = filepath.Join(dir, "paver.sock")
-	logPath := filepath.Join(dir, "paver.log")
-	binary := filepath.Join(r.cfg.ticketsPath, inst.ticket, "paver")
+	inst.socket = filepath.Join(dir, inst.service+".sock")
+	binary := filepath.Join(r.cfg.ticketsPath, inst.ticket, inst.service)
 
 	os.Remove(inst.socket)
 
-	cmd := exec.Command(binary,
-		"-pubkey", r.cfg.pubkey,
-		"-buckets", r.cfg.buckets,
-		"-socket", inst.socket,
-		"-tmpdir", tmpdir,
-		"-log", logPath,
-	)
+	var cmd *exec.Cmd
+
+	switch inst.service {
+	case serviceDeparter:
+		// departer writes its log and the finished zip into the tmpdir it is
+		// given, and prints "<prefix>/energyaccessexplorer-<id>.zip" as the
+		// download link — so the tmpdir is persistent (survives reaping) and
+		// the prefix is this ticket's public path.
+		builds := filepath.Join(r.cfg.departerBuilds, inst.ticket)
+		if err := os.MkdirAll(builds, 0755); err != nil {
+			return err
+		}
+
+		script := filepath.Join(dir, "departer.sh")
+		if err := write_departer_script(script, r.cfg.departerWorkspace, "/"+inst.ticket+"/departer/builds", builds); err != nil {
+			return err
+		}
+
+		cmd = exec.Command(binary,
+			"-script", script,
+			"-pubkey", r.cfg.pubkey,
+			"-socket", inst.socket,
+			"-tmpdir", builds,
+		)
+
+	default:
+		logPath := filepath.Join(dir, "paver.log")
+		cmd = exec.Command(binary,
+			"-pubkey", r.cfg.pubkey,
+			"-buckets", r.cfg.buckets,
+			"-socket", inst.socket,
+			"-tmpdir", tmpdir,
+			"-log", logPath,
+		)
+	}
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start %s: %w", binary, err)
@@ -182,11 +224,11 @@ func (r *registry) launch(inst *instance) error {
 	for {
 		select {
 		case <-exited:
-			return fmt.Errorf("paver process for %s exited during startup", inst.ticket)
+			return fmt.Errorf("%s process for %s exited during startup", inst.service, inst.ticket)
 		case <-deadline:
 			cmd.Process.Kill()
 			<-exited
-			return fmt.Errorf("paver process for %s did not become ready within %s", inst.ticket, r.cfg.startupTimeout)
+			return fmt.Errorf("%s process for %s did not become ready within %s", inst.service, inst.ticket, r.cfg.startupTimeout)
 		case <-tick.C:
 			if conn, err := net.Dial("unix", inst.socket); err == nil {
 				conn.Close()
@@ -229,8 +271,27 @@ func (r *registry) evict_over_cap_locked() {
 	}
 }
 
+// The script departer runs per build. Paths that differ per ticket are baked in
+// here; the build id and target OS still arrive as arguments ($1 tmpdir, $2 id,
+// $3 os), so nothing else needs to be templated.
+func write_departer_script(path, workspace, static_prefix, builds string) error {
+	body := "#!/bin/sh\n" +
+		"cd " + shell_quote(workspace) + " || exit 1\n" +
+		"if ! IDSFILE=$1/$2 ID=$2 bmake gobuild website tool fetch zip os=${3}; then\n" +
+		"\texit 1\n" +
+		"fi\n" +
+		"mv energyaccessexplorer-$2.zip " + shell_quote(builds) + "/\n" +
+		"echo " + shell_quote(static_prefix) + "/energyaccessexplorer-$2.zip\n"
+
+	return os.WriteFile(path, []byte(body), 0755)
+}
+
+func shell_quote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
 func kill_instance(inst *instance, reason string) {
-	logger.Printf("[INSTANCE reap] ticket=%s reason=%s", inst.ticket, reason)
+	logger.Printf("[INSTANCE reap] ticket=%s service=%s reason=%s", inst.ticket, inst.service, reason)
 
 	if inst.cmd != nil && inst.cmd.Process != nil {
 		inst.cmd.Process.Signal(syscall.SIGTERM)
@@ -252,14 +313,16 @@ func status_handler(r *registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		type instance_view struct {
 			Ticket     string `json:"ticket"`
+			Service    string `json:"service"`
 			State      string `json:"state"`
 			LastAccess string `json:"last_access,omitempty"`
 		}
 
 		r.mu.Lock()
 		views := make([]instance_view, 0, len(r.m))
-		for ticket, inst := range r.m {
-			v := instance_view{Ticket: ticket, State: "launching"}
+		for key, inst := range r.m {
+			v := instance_view{Ticket: inst.ticket, Service: inst.service, State: "launching"}
+			_ = key
 
 			select {
 			case <-inst.ready:

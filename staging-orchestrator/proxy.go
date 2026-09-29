@@ -6,32 +6,44 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
 
-// /EAE-464/paver/routines?... -> ticket="EAE-464", rest="/routines?...".
-var ticket_path_re = regexp.MustCompile(`^/([A-Z]+-[0-9]+)/paver(/.*)$`)
+// /EAE-464/paver/routines?... -> ticket="EAE-464", service="paver", rest="/routines?...".
+var ticket_path_re = regexp.MustCompile(`^/([A-Z]+-[0-9]+)/(paver|departer)(/.*)$`)
+
+// /EAE-464/departer/builds/<file> — finished departer logs and zips.
+var departer_builds_re = regexp.MustCompile(`^/([A-Z]+-[0-9]+)/departer/builds/(.+)$`)
 
 func proxy_handler(reg *registry) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m := ticket_path_re.FindStringSubmatch(r.URL.Path)
-		if m == nil {
-			http.Error(w, "expected /<TICKET>/paver/...", 400)
+		// Finished exports are plain files, served whether or not an instance
+		// is currently running (the download link must outlive the instance).
+		if m := departer_builds_re.FindStringSubmatch(r.URL.Path); m != nil {
+			serve_departer_build(reg, w, r, m[1], m[2])
 			return
 		}
-		ticket, rest := m[1], m[2]
 
-		inst, err := reg.get_or_launch(ticket)
+		m := ticket_path_re.FindStringSubmatch(r.URL.Path)
+		if m == nil {
+			http.Error(w, "expected /<TICKET>/{paver,departer}/...", 400)
+			return
+		}
+		ticket, service, rest := m[1], m[2], m[3]
+
+		inst, err := reg.get_or_launch(ticket, service)
 		if err == errNotFound {
-			http.Error(w, "no staging build found for "+ticket, 404)
+			http.Error(w, "no staging build found for "+ticket+"/"+service, 404)
 			return
 		} else if err != nil {
 			http.Error(w, err.Error(), 502)
 			return
 		}
 
-		r.URL.Path = rest // strip "/TICKET/paver", same as the shared /paver/ nginx location does
+		r.URL.Path = rest // strip "/TICKET/<service>", same as the shared locations do
 
 		inst.active.Add(1)
 		defer inst.active.Add(-1)
@@ -50,6 +62,31 @@ func proxy_handler(reg *registry) http.HandlerFunc {
 		}
 		rp.ServeHTTP(w, r)
 	}
+}
+
+// Serves /<TICKET>/departer/builds/<name> out of that ticket's builds dir. Only
+// bare filenames are accepted — everything the departer writes there is flat
+// (<id>, <id>.log, energyaccessexplorer-<id>.zip).
+func serve_departer_build(reg *registry, w http.ResponseWriter, r *http.Request, ticket, name string) {
+	if name == "" || name == "." || name == ".." || strings.ContainsAny(name, "/\\") {
+		http.Error(w, "bad build file name", http.StatusBadRequest)
+		return
+	}
+
+	f, err := os.Open(filepath.Join(reg.cfg.departerBuilds, ticket, name))
+	if err != nil {
+		http.Error(w, "no such build file", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil || info.IsDir() {
+		http.Error(w, "no such build file", http.StatusNotFound)
+		return
+	}
+
+	http.ServeContent(w, r, name, info.ModTime(), f)
 }
 
 func is_websocket_upgrade(r *http.Request) bool {
