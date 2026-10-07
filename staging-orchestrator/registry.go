@@ -183,7 +183,7 @@ func (r *registry) launch(inst *instance) error {
 		}
 
 		script := filepath.Join(dir, "departer.sh")
-		if err := write_departer_script(script, r.cfg.departerWorkspace, "/"+inst.ticket+"/departer/builds", builds, r.cfg.publicOrigin+"/"+inst.ticket); err != nil {
+		if err := write_departer_script(script, r.cfg.departerWorkspace, "/"+inst.ticket+"/departer/builds", builds, r.cfg.publicOrigin); err != nil {
 			return err
 		}
 
