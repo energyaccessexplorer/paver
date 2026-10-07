@@ -24,6 +24,7 @@ type config struct {
 	maxInstances      int
 	departerBuilds    string
 	departerWorkspace string
+	publicOrigin      string
 }
 
 var (
@@ -84,6 +85,7 @@ func parse_flags() *config {
 	flag.IntVar(&cfg.maxInstances, "max-instances", 5, "Maximum number of concurrently-running per-ticket instances (LRU-evicted beyond this)")
 	flag.StringVar(&cfg.departerBuilds, "departer-builds-path", "/var/www/departer-tickets", "Directory for per-ticket departer build output (logs + zips; served at /<TICKET>/departer/builds/)")
 	flag.StringVar(&cfg.departerWorkspace, "departer-workspace", "/var/cache/offroad", "Offroad workspace the per-ticket departer runs its build in")
+	flag.StringVar(&cfg.publicOrigin, "public-origin", "https://paver.energyaccessexplorer.org", "External origin this orchestrator is reachable at; prepended to the download link ticket departers write into their build logs")
 
 	flag.Parse()
 

@@ -183,7 +183,7 @@ func (r *registry) launch(inst *instance) error {
 		}
 
 		script := filepath.Join(dir, "departer.sh")
-		if err := write_departer_script(script, r.cfg.departerWorkspace, "/"+inst.ticket+"/departer/builds", builds); err != nil {
+		if err := write_departer_script(script, r.cfg.departerWorkspace, "/"+inst.ticket+"/departer/builds", builds, r.cfg.publicOrigin+"/"+inst.ticket); err != nil {
 			return err
 		}
 
@@ -273,15 +273,17 @@ func (r *registry) evict_over_cap_locked() {
 
 // The script departer runs per build. Paths that differ per ticket are baked in
 // here; the build id and target OS still arrive as arguments ($1 tmpdir, $2 id,
-// $3 os), so nothing else needs to be templated.
-func write_departer_script(path, workspace, static_prefix, builds string) error {
+// $3 os), so nothing else needs to be templated. public_base (e.g.
+// https://paver.energyaccessexplorer.org/EAE-506) is prepended to the download
+// link the log ends with, so it is absolute — and clickable — in the CMS.
+func write_departer_script(path, workspace, static_prefix, builds, public_base string) error {
 	body := "#!/bin/sh\n" +
 		"cd " + shell_quote(workspace) + " || exit 1\n" +
 		"if ! IDSFILE=$1/$2 ID=$2 bmake gobuild website tool fetch zip os=${3}; then\n" +
 		"\texit 1\n" +
 		"fi\n" +
 		"mv energyaccessexplorer-$2.zip " + shell_quote(builds) + "/\n" +
-		"echo " + shell_quote(static_prefix) + "/energyaccessexplorer-$2.zip\n"
+		"echo " + shell_quote(public_base+static_prefix) + "/energyaccessexplorer-$2.zip\n"
 
 	return os.WriteFile(path, []byte(body), 0755)
 }
