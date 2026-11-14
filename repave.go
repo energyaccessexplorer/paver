@@ -4,13 +4,13 @@ package main
 // publishes now. A raster made from a raster source is rebuilt from that
 // source with the parameters admin sends crop-raster; any other raster is
 // re-encoded as it is, because the parameters chosen when it was paved are not
-// stored. An original is only ever read: each result is written under a new
-// key, so cached copies stay valid and a rollback is a database revert.
+// stored. An original is only ever read and never deleted: each result is
+// written under the hash of its bytes, so cached copies stay valid, a rerun
+// writes nothing new, and a rollback only repoints datasets (see repoint.go).
 //
 // Every job has a key made of its inputs (parameters, the ETags of every file
 // it reads, the encoding version); a job whose key has a settled manifest entry
-// is skipped, so reruns redo only what changed. The SQL that repoints datasets
-// (and back) is built from the manifest.
+// is skipped, so reruns redo only what changed.
 
 import (
 	"bufio"
@@ -25,7 +25,6 @@ import (
 	"math"
 	"net/http"
 	"os"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -53,16 +52,26 @@ func (j repave_job) routine() string {
 	return j.Routine
 }
 
+// A job is an endpoint in one geography: a clone in another geography shares
+// the file, but a rebuild is cut to its own geography's grid.
+type job_ref struct{ endpoint, geography string }
+
+func (j repave_job) ref() job_ref { return job_ref{j.Endpoint, j.Geography} }
+
+func (e repave_entry) ref() job_ref { return job_ref{e.Old, e.Geography} }
+
 type repave_entry struct {
 	Old       string `json:"old"`
 	New       string `json:"new,omitempty"`
 	Dataset   string `json:"dataset,omitempty"`
+	Geography string `json:"geography,omitempty"`
 	Routine   string `json:"routine,omitempty"`
 	Key       string `json:"key,omitempty"`
 	Bucket    string `json:"bucket,omitempty"`
 	Status    string `json:"status"`
 	OldBytes  int64  `json:"old_bytes,omitempty"`
 	NewBytes  int64  `json:"new_bytes,omitempty"`
+	SHA256    string `json:"sha256,omitempty"`
 	Warning   string `json:"warning,omitempty"`
 	OldBands  int    `json:"old_bands,omitempty"`
 	NewBands  int    `json:"new_bands,omitempty"`
@@ -87,6 +96,10 @@ func repave_main(args []string) error {
 	bucket := fs.String("bucket", "", "Bucket to write to (from -buckets); none is a dry run")
 	apply := fs.Bool("apply", false, "Allow writing to a bucket that is not local")
 	jobs := fs.Int("j", 2, "Jobs run at once")
+	api := fs.String("api", "", "PostgREST URL: repoint datasets at what -bucket received; the token is read from "+api_token_env)
+	rollback := fs.String("rollback", "", "Repoints file to roll back through -api; without -api, only list")
+	geography := fs.String("geography", "", "Roll back only this geography")
+	dataset := fs.String("dataset", "", "Roll back only this dataset")
 
 	fs.StringVar(&buckets, "buckets", "/etc/paver-buckets.json", "")
 	fs.StringVar(&tmpdir, "tmpdir", os.TempDir(), "")
@@ -94,6 +107,17 @@ func repave_main(args []string) error {
 	fs.Parse(args)
 
 	logger = log.New(os.Stderr, "", log.LstdFlags)
+
+	if *rollback != "" {
+		var p *postgrest
+		if *api != "" {
+			var err error
+			if p, err = postgrest_open(*api); err != nil {
+				return err
+			}
+		}
+		return repave_rollback(p, *rollback, *geography, *dataset)
+	}
 
 	if *list == "" || *manifest == "" {
 		return errors.New("repave needs -list and -manifest")
@@ -109,6 +133,18 @@ func repave_main(args []string) error {
 			return fmt.Errorf("bucket '%s' is not local: writing to it needs -apply", *bucket)
 		}
 		target = &conf
+	}
+
+	var p *postgrest
+	if *api != "" {
+		if target == nil {
+			return errors.New("-api needs -bucket: a dry run has nothing to repoint")
+		}
+
+		var err error
+		if p, err = postgrest_open(*api); err != nil {
+			return err
+		}
 	}
 
 	todo, err := read_jobs(*list)
@@ -134,7 +170,7 @@ func repave_main(args []string) error {
 
 		j, _ := json.Marshal(e)
 		out.Write(append(j, '\n'))
-		previous[e.Old] = e
+		previous[e.ref()] = e
 
 		logger.Printf("%-9s %-11s %s %d -> %d %s", e.Status, e.Routine, e.Old, e.OldBytes, e.NewBytes, e.Error)
 	}
@@ -149,12 +185,12 @@ func repave_main(args []string) error {
 			for job := range queue {
 				key, err := repave_key(job)
 				if err != nil {
-					record(repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Routine: job.routine(), Status: repave_failed, Error: err.Error()})
+					record(repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Geography: job.Geography, Routine: job.routine(), Status: repave_failed, Error: err.Error()})
 					continue
 				}
 
 				mu.Lock()
-				e, ok := previous[job.Endpoint]
+				e, ok := previous[job.ref()]
 				mu.Unlock()
 
 				if ok && repave_settled(e, *bucket, key) {
@@ -172,13 +208,13 @@ func repave_main(args []string) error {
 	close(queue)
 	wg.Wait()
 
-	if err := repave_sql(previous, *manifest); err != nil {
-		return err
-	}
-
 	repave_summary(previous)
 
-	return nil
+	if p == nil {
+		return nil
+	}
+
+	return repave_repoint(p, todo, previous, target.Name, *manifest+".repoints.jsonl")
 }
 
 // repave_settled says a previous run's entry needs no more work for bucket
@@ -247,7 +283,7 @@ func object_version(url string) (string, error) {
 }
 
 func repave_one(j repave_job, key string, target *s3config) repave_entry {
-	e := repave_entry{Old: j.Endpoint, Dataset: j.DatasetID, Routine: j.routine(), Key: key}
+	e := repave_entry{Old: j.Endpoint, Dataset: j.DatasetID, Geography: j.Geography, Routine: j.routine(), Key: key}
 	if target != nil {
 		e.Bucket = target.Name
 	}
@@ -322,23 +358,36 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 		return e
 	}
 
-	// s3put names the object after the file's uuid: a fresh one.
-	named := _filename()
-	if err := os.Rename(out, named); err != nil {
-		trash(out)
+	defer trash(out)
+
+	if e.SHA256, err = file_sha256(out); err != nil {
 		e.Status, e.Error = repave_failed, err.Error()
 		return e
 	}
-	defer trash(named)
 
-	if !s3put(named, *target) {
+	if !s3has(*target, e.SHA256, e.NewBytes) && !s3put_as(out, e.SHA256, *target) {
 		e.Status, e.Error = repave_failed, "upload failed"
 		return e
 	}
 
-	e.Status, e.New = repave_done, s3endpoint(*target, _uuid(named))
+	e.Status, e.New = repave_done, s3endpoint(*target, e.SHA256)
 
 	return e
+}
+
+func file_sha256(f filename) (string, error) {
+	file, err := os.Open(f)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, file); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 var err_mismatch = errors.New("rebuild differs from the published raster")
@@ -781,7 +830,8 @@ func download(url string) (filename, error) {
 	return f, file.Close()
 }
 
-// read_jobs reads a job list, one job per endpoint (the first one wins).
+// read_jobs reads a job list, one job per endpoint and geography (the first
+// one wins).
 func read_jobs(f filename) ([]repave_job, error) {
 	file, err := os.Open(f)
 	if err != nil {
@@ -790,7 +840,7 @@ func read_jobs(f filename) ([]repave_job, error) {
 	defer file.Close()
 
 	var jobs []repave_job
-	seen := map[string]bool{}
+	seen := map[job_ref]bool{}
 
 	sc := bufio.NewScanner(file)
 	sc.Buffer(make([]byte, 1<<20), 1<<20)
@@ -813,12 +863,12 @@ func read_jobs(f filename) ([]repave_job, error) {
 			return nil, fmt.Errorf("%s:%d: no endpoint", f, n)
 		}
 
-		if j.routine() == "crop-raster" && (j.routine_params.Dataset == "" || j.Reference == "" || j.Base == "" || j.Config.Resample == "") {
-			return nil, fmt.Errorf("%s:%d: crop-raster job without dataseturl, referenceurl, baseurl or config", f, n)
+		if j.routine() == "crop-raster" && (j.routine_params.Dataset == "" || j.Reference == "" || j.Base == "" || j.Config.Resample == "" || j.Geography == "") {
+			return nil, fmt.Errorf("%s:%d: crop-raster job without dataseturl, referenceurl, baseurl, config or geography", f, n)
 		}
 
-		if !seen[j.Endpoint] {
-			seen[j.Endpoint] = true
+		if !seen[j.ref()] {
+			seen[j.ref()] = true
 			jobs = append(jobs, j)
 		}
 	}
@@ -826,9 +876,9 @@ func read_jobs(f filename) ([]repave_job, error) {
 	return jobs, sc.Err()
 }
 
-// manifest_read returns the last entry recorded for every endpoint.
-func manifest_read(f filename) (map[string]repave_entry, error) {
-	entries := map[string]repave_entry{}
+// manifest_read returns the last entry recorded for every job.
+func manifest_read(f filename) (map[job_ref]repave_entry, error) {
+	entries := map[job_ref]repave_entry{}
 
 	file, err := os.Open(f)
 	if errors.Is(err, os.ErrNotExist) {
@@ -847,54 +897,13 @@ func manifest_read(f filename) (map[string]repave_entry, error) {
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
 			return nil, fmt.Errorf("%s: %w", f, err)
 		}
-		entries[e.Old] = e
+		entries[e.ref()] = e
 	}
 
 	return entries, sc.Err()
 }
 
-func sql_literal(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
-
-// repoint_sql swaps one endpoint for another in every dataset that has it.
-func repoint_sql(from, to string) string {
-	return fmt.Sprintf(`update datasets set processed_files = (
-	select jsonb_agg(case when f->>'endpoint' = %[1]s then jsonb_set(f, '{endpoint}', to_jsonb(%[2]s::text)) else f end order by o)
-	from jsonb_array_elements(processed_files) with ordinality as e(f, o))
-where processed_files @> jsonb_build_array(jsonb_build_object('endpoint', %[1]s::text));
-`, sql_literal(from), sql_literal(to))
-}
-
-func repave_sql(entries map[string]repave_entry, manifest filename) error {
-	var olds []string
-	for old, e := range entries {
-		if e.Status == repave_done {
-			olds = append(olds, old)
-		}
-	}
-	sort.Strings(olds)
-
-	var apply, rollback strings.Builder
-	apply.WriteString("begin;\n")
-	rollback.WriteString("begin;\n")
-
-	for _, old := range olds {
-		apply.WriteString(repoint_sql(old, entries[old].New))
-		rollback.WriteString(repoint_sql(entries[old].New, old))
-	}
-
-	apply.WriteString("commit;\n")
-	rollback.WriteString("commit;\n")
-
-	if err := os.WriteFile(manifest+".apply.sql", []byte(apply.String()), 0644); err != nil {
-		return err
-	}
-
-	return os.WriteFile(manifest+".rollback.sql", []byte(rollback.String()), 0644)
-}
-
-func repave_summary(entries map[string]repave_entry) {
+func repave_summary(entries map[job_ref]repave_entry) {
 	type tally struct {
 		count         map[string]int
 		before, after int64

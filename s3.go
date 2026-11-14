@@ -65,7 +65,7 @@ func s3endpoint(s3 s3config, key string) string {
 	return fmt.Sprintf("https://%s.%s/%s/%s", s3.Bucket, s3.Provider, s3.Directory, key)
 }
 
-func localput(fname filename, s3 s3config) bool {
+func localput(fname filename, key string, s3 s3config) bool {
 	if err := os.MkdirAll(s3.Directory, 0755); err != nil {
 		logger.Println(err.Error())
 		return false
@@ -77,7 +77,7 @@ func localput(fname filename, s3 s3config) bool {
 		return false
 	}
 
-	if err := os.WriteFile(filepath.Join(s3.Directory, _uuid(fname)), content, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(s3.Directory, key), content, 0644); err != nil {
 		logger.Println(err.Error())
 		return false
 	}
@@ -90,8 +90,12 @@ func (p routine_params) url(fname filename) string {
 }
 
 func s3put(fname filename, s3 s3config) bool {
+	return s3put_as(fname, _uuid(fname), s3)
+}
+
+func s3put_as(fname filename, key string, s3 s3config) bool {
 	if s3.Provider == local_provider {
-		return localput(fname, s3)
+		return localput(fname, key, s3)
 	}
 
 	file, err := os.Open(fname)
@@ -105,7 +109,7 @@ func s3put(fname filename, s3 s3config) bool {
 		return false
 	}
 
-	endpoint, err := s3presigned(s3.Name, "PUT", s3.Directory, _uuid(fname))
+	endpoint, err := s3presigned(s3.Name, "PUT", s3.Directory, key)
 	if err != nil {
 		return false
 	}
@@ -136,6 +140,23 @@ func s3put(fname filename, s3 s3config) bool {
 	}
 
 	return true
+}
+
+// s3has says the bucket holds key with size bytes. A PUT is atomic, so an
+// object of the right size is a whole one.
+func s3has(s3 s3config, key string, size int64) bool {
+	if s3.Provider == local_provider {
+		st, err := os.Stat(filepath.Join(s3.Directory, key))
+		return err == nil && st.Size() == size
+	}
+
+	r, err := http_client.Head(s3endpoint(s3, key))
+	if err != nil {
+		return false
+	}
+	r.Body.Close()
+
+	return r.StatusCode == http.StatusOK && r.ContentLength == size
 }
 
 func s3presigned(platform string, method string, directory string, filename string) (url string, err error) {
