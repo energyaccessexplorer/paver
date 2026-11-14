@@ -508,3 +508,82 @@ func TestCropRunsOneLargeSumWarpAtATime(t *testing.T) {
 		t.Fatal("a small sum warp waited for the slot")
 	}
 }
+
+// The aggregation bands answer different questions about the same subpixels:
+// band 3 is their mean, band 2 each subpixel's share of the cell it falls in, so
+// the shares add back up to the source pixel's value. A source four times
+// coarser than the grid separates the two by a factor of sixteen, which is how a
+// swap, or a plain mean in band 2, would show.
+func TestCropAverageBandMeansTheSubpixelsThatTheSumBandSplits(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	base, err := gdal.Open(p.Base, gdal.ReadOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gt, wkt := base.GeoTransform(), base.Projection()
+	width, height := base.RasterXSize(), base.RasterYSize()
+	base.Close()
+
+	const k = 4
+	source_w, source_h := width/k, height/k
+	value := func(x, y int) float64 { return 10 + float64((y*7+x)%13) }
+
+	source := filepath.Join(tmpdir, "quarter.tif")
+	drv, _ := gdal.GetDriverByName("GTiff")
+	ds := drv.Create(source, source_w, source_h, 1, gdal.Float32, nil)
+	ds.SetProjection(wkt)
+	ds.SetGeoTransform([6]float64{gt[0], gt[1] * k, 0, gt[3], 0, gt[5] * k})
+
+	values := make([]float32, source_w*source_h)
+	for y := 0; y < source_h; y++ {
+		for x := 0; x < source_w; x++ {
+			values[y*source_w+x] = float32(value(x, y))
+		}
+	}
+	ds.RasterBand(1).IO(gdal.Write, 0, 0, source_w, source_h, values, source_w, source_h, 0, 0)
+	ds.Close()
+
+	p.Dataset = source
+
+	out, err := raster_crop(p.Dataset, p.Base, p.Reference, p.Config, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sum, average := band_values(t, out, 2), band_values(t, out, 3)
+
+	// Every cell of a source pixel sees that pixel and nothing else, away from
+	// the source's own edge.
+	checked := 0
+
+	for y := 1; y < source_h-1; y++ {
+		for x := 1; x < source_w-1; x++ {
+			want := value(x, y)
+			shares := 0.0
+
+			for dy := 0; dy < k; dy++ {
+				for dx := 0; dx < k; dx++ {
+					i := (y*k+dy)*width + (x*k + dx)
+
+					if math.Abs(average[i]-want) > want*1e-4 {
+						t.Fatalf("average band at (%d,%d): %g, source pixel %g", x*k+dx, y*k+dy, average[i], want)
+					}
+
+					shares += sum[i]
+					checked++
+				}
+			}
+
+			if math.Abs(shares-want) > want*1e-4 {
+				t.Errorf("sum band shares of source pixel (%d,%d) add up to %g, want %g", x, y, shares, want)
+			}
+		}
+	}
+
+	if checked == 0 {
+		t.Fatal("no cells checked")
+	}
+}
