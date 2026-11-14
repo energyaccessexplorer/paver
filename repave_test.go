@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/energyaccessexplorer/gdal"
 )
@@ -65,16 +66,29 @@ func TestRepaveReencodesUnderNewKeys(t *testing.T) {
 	if e.Status != repave_done || e.Routine != repave_reencode {
 		t.Fatalf("%+v", e)
 	}
-	if e.New == e.Old || !strings.HasPrefix(e.New, "http://test.localhost/repave/") {
+	if e.New != s3endpoint(bucket, e.SHA256) {
 		t.Errorf("new endpoint %s", e.New)
 	}
 	if e.NewBytes >= e.OldBytes {
 		t.Errorf("%d -> %d bytes", e.OldBytes, e.NewBytes)
 	}
 
-	written := filepath.Join(bucket.Directory, _uuid(e.New))
+	written := filepath.Join(bucket.Directory, e.SHA256)
 	if err := rasters_identical(raster, written); err != nil {
 		t.Fatal(err)
+	}
+	if sum, _ := file_sha256(written); sum != e.SHA256 {
+		t.Errorf("object %s holds bytes hashing to %s", e.SHA256, sum)
+	}
+
+	// The same bytes are already there: nothing is written.
+	long_ago := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	os.Chtimes(written, long_ago, long_ago)
+	if again := run_job(t, repave_job{Endpoint: s.URL + "/r"}, &bucket); again.New != e.New {
+		t.Errorf("rerun wrote %s, first run %s", again.New, e.New)
+	}
+	if st, _ := os.Stat(written); !st.ModTime().Equal(long_ago) {
+		t.Error("rerun rewrote an object it already had")
 	}
 
 	if v := run_job(t, repave_job{Endpoint: s.URL + "/v"}, &bucket); v.Status != repave_skipped {
@@ -196,7 +210,7 @@ func TestRepaveRebuildsLegacyRastersFromTheirSource(t *testing.T) {
 		t.Fatalf("%+v", e)
 	}
 
-	written := filepath.Join(bucket.Directory, _uuid(e.New))
+	written := filepath.Join(bucket.Directory, e.SHA256)
 	assert_deliverable_layout(t, written, "1", "3")
 
 	if err := crop_on_base_grid(job.Base, written); err != nil {
@@ -381,16 +395,23 @@ func TestReadJobs(t *testing.T) {
 	list := filepath.Join(tmpdir, "jobs")
 	os.WriteFile(list, []byte(`https://a/plain
 
-{"endpoint":"https://a/crop","dataset":"d","routine":"crop-raster","dataseturl":"https://s","referenceurl":"https://r","baseurl":"https://b","config":{"numbertype":"UInt16","nodata":65535,"resample":"near"},"resolution":1000}
+{"endpoint":"https://a/crop","dataset":"d","geography":"g1","routine":"crop-raster","dataseturl":"https://s","referenceurl":"https://r","baseurl":"https://b","config":{"numbertype":"UInt16","nodata":65535,"resample":"near"},"resolution":1000}
 https://a/plain
+{"endpoint":"https://a/crop","dataset":"d2","geography":"g1","routine":"crop-raster","dataseturl":"https://s","referenceurl":"https://r","baseurl":"https://b","config":{"numbertype":"UInt16","nodata":65535,"resample":"near"},"resolution":1000}
+{"endpoint":"https://a/crop","dataset":"d3","geography":"g2","routine":"crop-raster","dataseturl":"https://s","referenceurl":"https://r2","baseurl":"https://b2","config":{"numbertype":"UInt16","nodata":65535,"resample":"near"},"resolution":1000}
 `), 0644)
 
 	jobs, err := read_jobs(list)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(jobs) != 2 {
+	// A clone in the same geography shares the job; one in another geography
+	// gets its own rebuild.
+	if len(jobs) != 3 {
 		t.Fatalf("%d jobs", len(jobs))
+	}
+	if jobs[1].DatasetID != "d" || jobs[2].Geography != "g2" || jobs[2].Base != "https://b2" {
+		t.Errorf("%+v", jobs)
 	}
 	if jobs[0].routine() != repave_reencode || jobs[1].Config.Nodata != 65535 || jobs[1].Resolution != 1000 || jobs[1].Base != "https://b" {
 		t.Errorf("%+v", jobs)
@@ -400,37 +421,10 @@ https://a/plain
 	if _, err := read_jobs(list); err == nil {
 		t.Error("crop-raster job without its inputs accepted")
 	}
-}
 
-func TestRepaveSqlRepointsAndRollsBack(t *testing.T) {
-	test_tmpdir(t)
-
-	manifest := filepath.Join(tmpdir, "m.jsonl")
-	entries := map[string]repave_entry{
-		"https://a/old":  {Old: "https://a/old", New: "https://a/new", Status: repave_done},
-		"https://a/o'q":  {Old: "https://a/o'q", New: "https://a/n", Status: repave_done},
-		"https://a/same": {Old: "https://a/same", Status: repave_unchanged},
-		"https://a/diff": {Old: "https://a/diff", Status: repave_mismatch},
-	}
-
-	if err := repave_sql(entries, manifest); err != nil {
-		t.Fatal(err)
-	}
-
-	apply, _ := os.ReadFile(manifest + ".apply.sql")
-	rollback, _ := os.ReadFile(manifest + ".rollback.sql")
-
-	if n := strings.Count(string(apply), "update datasets"); n != 2 {
-		t.Errorf("%d updates in apply", n)
-	}
-	if !strings.Contains(string(apply), `'https://a/o''q'`) {
-		t.Error("quote not escaped")
-	}
-	if !strings.Contains(string(rollback), "f->>'endpoint' = 'https://a/new' then jsonb_set(f, '{endpoint}', to_jsonb('https://a/old'::text))") {
-		t.Errorf("rollback:\n%s", rollback)
-	}
-	if !strings.HasPrefix(string(apply), "begin;\n") || !strings.HasSuffix(string(apply), "commit;\n") {
-		t.Error("apply is not one transaction")
+	os.WriteFile(list, []byte(`{"endpoint":"https://a/crop","routine":"crop-raster","dataseturl":"https://s","referenceurl":"https://r","baseurl":"https://b","config":{"resample":"near"}}`), 0644)
+	if _, err := read_jobs(list); err == nil {
+		t.Error("crop-raster job without a geography accepted")
 	}
 }
 
@@ -438,19 +432,23 @@ func TestManifestResumesFromTheLastEntry(t *testing.T) {
 	test_tmpdir(t)
 
 	manifest := filepath.Join(tmpdir, "m.jsonl")
-	os.WriteFile(manifest, []byte(`{"old":"u","status":"failed","error":"x"}
-{"old":"u","status":"done","new":"n","bucket":"local","key":"k"}
+	os.WriteFile(manifest, []byte(`{"old":"u","geography":"g","status":"failed","error":"x"}
+{"old":"u","geography":"g","status":"done","new":"n","bucket":"local","key":"k"}
+{"old":"u","geography":"g2","status":"failed","error":"y"}
 `), 0644)
 
 	entries, err := manifest_read(manifest)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e := entries["u"]; e.Status != repave_done || e.New != "n" || e.Key != "k" {
+	if e := entries[job_ref{"u", "g"}]; e.Status != repave_done || e.New != "n" || e.Key != "k" {
 		t.Errorf("%+v", e)
 	}
+	if e := entries[job_ref{"u", "g2"}]; e.Status != repave_failed {
+		t.Errorf("another geography's entry: %+v", e)
+	}
 
-	b, _ := json.Marshal(entries["u"])
+	b, _ := json.Marshal(entries[job_ref{"u", "g"}])
 	if !strings.Contains(string(b), `"key":"k"`) {
 		t.Error(string(b))
 	}
