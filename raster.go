@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/energyaccessexplorer/gdal"
+	"math"
 	"os/exec"
 	"strconv"
 )
@@ -209,25 +210,34 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 	}
 	defer r.Close()
 
-	src, err := gdal.OpenEx(in, gdal.OFReadOnly, nil, nil, nil)
+	out := _filename()
+
+	// One band to warp: a source with an alpha band would warp it into the
+	// output too, and the tool reads band 1 as the display band.
+	display_src := _filename() + ".tif"
+	if err := gdal_translate([]string{"-b", "1", in, display_src}); err != nil {
+		return "", err
+	}
+	defer trash(display_src)
+
+	one, err := gdal.OpenEx(display_src, gdal.OFReadOnly, nil, nil, nil)
 	if err != nil {
 		return "", err
 	}
-	defer src.Close()
-
-	out := _filename()
-
-	f := gdal.OpenDataSource(ref, 0)
-	defer f.Destroy()
-
-	layer := f.LayerByIndex(0).Name()
-	w(" cropping to first layer: %s", layer)
+	defer one.Close()
 
 	x := r.RasterXSize()
 	y := r.RasterYSize()
 
-	w(" raster size: (%d,%d)", x, y)
-	w(" nodata: %d", rc.Nodata)
+	gt := r.GeoTransform()
+	extent := []string{
+		strconv.FormatFloat(gt[0], 'f', -1, 64),
+		strconv.FormatFloat(gt[3]+float64(y)*gt[5], 'f', -1, 64),
+		strconv.FormatFloat(gt[0]+float64(x)*gt[1], 'f', -1, 64),
+		strconv.FormatFloat(gt[3], 'f', -1, 64),
+	}
+
+	w(" grid: (%d,%d) from the outline raster, nodata: %d", x, y, rc.Nodata)
 
 	// The output is a single, uniformly-typed Float32 raster with three bands:
 	//   1 = display value (configured resampling, e.g. near)
@@ -247,20 +257,18 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 
 		opts := []string{
 			"-of", "GTiff",
-			"-t_srs", "EPSG:3857",
+			"-t_srs", r.Projection(),
+			"-te", extent[0], extent[1], extent[2], extent[3],
 			"-ts", strconv.Itoa(x), strconv.Itoa(y),
 			"-r", method,
 			"-ot", "Float32",
 			"-dstnodata", strconv.Itoa(rc.Nodata),
-			"-cutline", ref,
-			"-crop_to_cutline",
-			"-cl", layer,
 			"-wo", "NUM_THREADS=ALL_CPUS",
 		}
 		opts = append(opts, gtiff_opts...)
 
 		release := capture()
-		dest, err := gdal.Warp(band_out, nil, []gdal.Dataset{src}, opts)
+		dest, err := gdal.Warp(band_out, nil, []gdal.Dataset{one}, opts)
 
 		result := release()
 		if err != nil {
@@ -302,5 +310,69 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 		return "", fmt.Errorf("gdal_translate: %v: %s", err, buf)
 	}
 
+	if err := mask_by_base(out, base, rc.Nodata); err != nil {
+		trash(out)
+		return "", err
+	}
+
 	return out, nil
+}
+
+// mask_by_base blanks every cell of out that base marks as empty. The outline
+// raster, not the cutline, decides which cells belong to the geography: a
+// cutline drops the cells a coarse source covers only partly, zeros included.
+func mask_by_base(out filename, base filename, nodata int) error {
+	b, err := gdal.Open(base, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+
+	bb := b.RasterBand(1)
+	base_nodata, has_nodata := bb.NoDataValue()
+
+	o, err := gdal.Open(out, gdal.Update)
+	if err != nil {
+		return err
+	}
+	defer o.Close()
+
+	width, height := b.RasterXSize(), b.RasterYSize()
+
+	const rows = 256
+
+	for y := 0; y < height; y += rows {
+		n := min(rows, height-y)
+
+		inside := make([]float64, width*n)
+		if err := bb.IO(gdal.Read, 0, y, width, n, inside, width, n, 0, 0); err != nil {
+			return err
+		}
+
+		for i := 1; i <= o.RasterCount(); i++ {
+			band := o.RasterBand(i)
+
+			values := make([]float64, width*n)
+			if err := band.IO(gdal.Read, 0, y, width, n, values, width, n, 0, 0); err != nil {
+				return err
+			}
+
+			changed := false
+			for k := range values {
+				empty := math.IsNaN(inside[k]) || (has_nodata && inside[k] == base_nodata)
+				if empty && values[k] != float64(nodata) {
+					values[k] = float64(nodata)
+					changed = true
+				}
+			}
+
+			if changed {
+				if err := band.IO(gdal.Write, 0, y, width, n, values, width, n, 0, 0); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

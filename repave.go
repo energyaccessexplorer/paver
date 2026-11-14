@@ -63,6 +63,7 @@ type repave_entry struct {
 	Status    string `json:"status"`
 	OldBytes  int64  `json:"old_bytes,omitempty"`
 	NewBytes  int64  `json:"new_bytes,omitempty"`
+	Warning   string `json:"warning,omitempty"`
 	OldBands  int    `json:"old_bands,omitempty"`
 	NewBands  int    `json:"new_bands,omitempty"`
 	Predictor string `json:"predictor,omitempty"`
@@ -283,7 +284,11 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 		}
 
 	case "crop-raster":
-		out, e.Predictor, err = repave_crop(j, in)
+		var agree float64
+		out, e.Predictor, agree, err = repave_crop(j, in)
+		if err == nil && agree < 0.98 {
+			e.Warning = fmt.Sprintf("%.0f%% of sampled cells differ from the source; it may have changed since the file was paved", 100*(1-agree))
+		}
 		if errors.Is(err, err_mismatch) {
 			e.Status, e.Error = repave_mismatch, err.Error()
 			return e
@@ -338,27 +343,376 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 
 var err_mismatch = errors.New("rebuild differs from the published raster")
 
-// repave_crop rebuilds a raster from its source as crop-raster does now, and
-// checks it against the published one: same grid, and the same display band.
-// The aggregation bands are new data, so only their presence is checked.
-func repave_crop(j repave_job, published filename) (filename, string, error) {
+// disagreement is a check's verdict on a rebuild, as opposed to a failure to
+// run the check: only a verdict settles a job, a failure is retried.
+type disagreement struct{ error }
+
+func disagrees(format string, a ...any) error {
+	return disagreement{fmt.Errorf(format, a...)}
+}
+
+// repave_crop rebuilds a raster from its source on the outline raster's
+// grid, and checks the result against what can be known independently: the
+// grid the tool assumes, the cells the geography covers, and -- when the source
+// is already in the grid's projection -- the source values themselves.
+func repave_crop(j repave_job, published filename) (filename, string, float64, error) {
 	cropped, err := crop_raster_output(noop_reporter, j.routine_params)
 	if err != nil {
-		return "", "", err
+		return "", "", 1, err
 	}
 
 	out, predictor, err := raster_deliverable(cropped)
 	trash(cropped)
 	if err != nil {
-		return "", "", err
+		return "", "", 1, err
 	}
 
-	if err := display_band_matches(published, out); err != nil {
+	agree, err := crop_values_from_source(j.Dataset, j.Base, out, j.Config.Resample)
+
+	if err := crop_verdict(crop_on_base_grid(j.Base, out), err, crop_retains_coverage(published, j.Base, out)); err != nil {
 		trash(out)
-		return "", "", fmt.Errorf("%w: %v", err_mismatch, err)
+		return "", "", 0, err
 	}
 
-	return out, predictor, nil
+	return out, predictor, agree, nil
+}
+
+// crop_verdict is the first check that could not run, or err_mismatch with
+// every disagreement, or nil.
+func crop_verdict(checks ...error) error {
+	verdicts := []string{}
+
+	for _, e := range checks {
+		var d disagreement
+		switch {
+		case e == nil:
+		case errors.As(e, &d):
+			verdicts = append(verdicts, e.Error())
+		default:
+			return e
+		}
+	}
+
+	if len(verdicts) > 0 {
+		return fmt.Errorf("%w: %s", err_mismatch, strings.Join(verdicts, "; "))
+	}
+
+	return nil
+}
+
+// crop_on_base_grid: same size, geotransform and projection as the outline
+// raster, and no value in a cell the outline raster leaves empty.
+func crop_on_base_grid(base, out filename) error {
+	b, err := gdal.Open(base, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+
+	o, err := gdal.Open(out, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer o.Close()
+
+	if b.RasterXSize() != o.RasterXSize() || b.RasterYSize() != o.RasterYSize() {
+		return disagrees("grid %dx%d, outline raster is %dx%d", o.RasterXSize(), o.RasterYSize(), b.RasterXSize(), b.RasterYSize())
+	}
+	if !geotransforms_equal(b.GeoTransform(), o.GeoTransform()) {
+		return disagrees("geotransform %v, outline raster is %v", o.GeoTransform(), b.GeoTransform())
+	}
+	if !projections_equal(b.Projection(), o.Projection()) {
+		return disagrees("projection differs from the outline raster")
+	}
+	if o.RasterCount() != 3 {
+		return disagrees("%d bands, want 3", o.RasterCount())
+	}
+
+	outside, err := cells_outside_base(b, o)
+	if err != nil {
+		return err
+	}
+	if outside > 0 {
+		return disagrees("%d cells hold a value outside the outline", outside)
+	}
+
+	return nil
+}
+
+func cells_outside_base(base, out gdal.Dataset) (int, error) {
+	bb := base.RasterBand(1)
+	base_nodata, has := bb.NoDataValue()
+	ob := out.RasterBand(1)
+	out_nodata, out_has := ob.NoDataValue()
+
+	width, height := base.RasterXSize(), base.RasterYSize()
+
+	const rows = 256
+	outside := 0
+
+	for y := 0; y < height; y += rows {
+		n := min(rows, height-y)
+
+		inside := make([]float64, width*n)
+		values := make([]float64, width*n)
+
+		if err := bb.IO(gdal.Read, 0, y, width, n, inside, width, n, 0, 0); err != nil {
+			return 0, err
+		}
+		if err := ob.IO(gdal.Read, 0, y, width, n, values, width, n, 0, 0); err != nil {
+			return 0, err
+		}
+
+		for k := range values {
+			empty := math.IsNaN(inside[k]) || (has && inside[k] == base_nodata)
+			valued := !math.IsNaN(values[k]) && !(out_has && values[k] == out_nodata)
+			if empty && valued {
+				outside++
+			}
+		}
+	}
+
+	return outside, nil
+}
+
+// crop_values_from_source checks sampled cells against the source itself, when
+// the source is already in the grid's projection so a cell centre maps to a
+// source pixel arithmetically. A cell whose centre falls in an empty source
+// pixel may be empty or filled by the resampling; any other cell must hold the
+// source value.
+func crop_values_from_source(src, base, out filename, resample string) (float64, error) {
+	// Only nearest keeps a cell centre equal to one source pixel.
+	if resample != "near" {
+		return 1, nil
+	}
+
+	s, err := gdal.Open(src, gdal.ReadOnly)
+	if err != nil {
+		return 0, err
+	}
+	defer s.Close()
+
+	b, err := gdal.Open(base, gdal.ReadOnly)
+	if err != nil {
+		return 0, err
+	}
+	defer b.Close()
+
+	o, err := gdal.Open(out, gdal.ReadOnly)
+	if err != nil {
+		return 0, err
+	}
+	defer o.Close()
+
+	if !projections_equal(s.Projection(), b.Projection()) {
+		return 1, nil
+	}
+
+	values, ok := sample_grid(o)
+	if !ok {
+		return 1, nil
+	}
+
+	sb := s.RasterBand(1)
+	source_nodata, source_has := sb.NoDataValue()
+	sgt := s.GeoTransform()
+	sw, sh := s.RasterXSize(), s.RasterYSize()
+	source := make([]float64, sw*sh)
+	if err := sb.IO(gdal.Read, 0, 0, sw, sh, source, sw, sh, 0, 0); err != nil {
+		return 0, err
+	}
+
+	const samples = 2000
+	const step = 7 // coprimes with typical widths, to walk the grid
+
+	gt := b.GeoTransform()
+	bw, bh := b.RasterXSize(), b.RasterYSize()
+
+	checked, got := 0, 0
+
+	for i := 0; i < bw*bh && checked < samples; i += step {
+		r, c := (i/bw)%bh, i%bw
+		v, valued := values(r, c)
+		if !valued {
+			continue
+		}
+
+		x := gt[0] + (float64(c)+0.5)*gt[1]
+		y := gt[3] + (float64(r)+0.5)*gt[5]
+
+		sc := int(math.Floor((x - sgt[0]) / sgt[1]))
+		sr := int(math.Floor((y - sgt[3]) / sgt[5]))
+		if sc < 0 || sc >= sw || sr < 0 || sr >= sh {
+			continue
+		}
+
+		// Nearest may take either pixel whose area holds the centre, so a value
+		// from the 3x3 neighbourhood counts as the source's.
+		matched := false
+		for dr := -1; dr <= 1 && !matched; dr++ {
+			for dc := -1; dc <= 1 && !matched; dc++ {
+				r2, c2 := sr+dr, sc+dc
+				if r2 < 0 || r2 >= sh || c2 < 0 || c2 >= sw {
+					continue
+				}
+				sv := source[r2*sw+c2]
+				if math.IsNaN(sv) || (source_has && sv == source_nodata) {
+					continue
+				}
+				matched = v == sv
+			}
+		}
+
+		checked++
+		if matched {
+			got++
+		}
+	}
+
+	if checked < 100 {
+		return 1, nil
+	}
+
+	return float64(got) / float64(checked), nil
+}
+
+// crop_retains_coverage: the rebuild publishes at least as much of the
+// geography as the file it replaces. Only cells inside the outline raster's
+// mask count -- a cutline used to keep cells outside it, which the grid fix
+// deliberately drops.
+func crop_retains_coverage(published, base, out filename) error {
+	p, err := gdal.Open(published, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer p.Close()
+
+	b, err := gdal.Open(base, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer b.Close()
+
+	o, err := gdal.Open(out, gdal.ReadOnly)
+	if err != nil {
+		return err
+	}
+	defer o.Close()
+
+	if !projections_equal(p.Projection(), b.Projection()) {
+		return nil
+	}
+
+	inside, err := valued_inside(o, b)
+	if err != nil {
+		return err
+	}
+
+	before, err := valued_inside(p, b)
+	if err != nil {
+		return err
+	}
+
+	if before > 0 && float64(inside) < 0.95*float64(before) {
+		return disagrees("%d cells carry a value inside the outline, the published file had %d", inside, before)
+	}
+
+	return nil
+}
+
+// valued_inside counts ds's cells that carry a value and fall inside base's
+// mask. Both are read on their own grids: a cell centre maps to a base pixel
+// arithmetically because the projections match.
+func valued_inside(ds, base gdal.Dataset) (int, error) {
+	band := ds.RasterBand(1)
+	nodata, has := band.NoDataValue()
+
+	bb := base.RasterBand(1)
+	base_nodata, base_has := bb.NoDataValue()
+	bgt := base.GeoTransform()
+	bw, bh := base.RasterXSize(), base.RasterYSize()
+
+	mask := make([]float64, bw*bh)
+	if err := bb.IO(gdal.Read, 0, 0, bw, bh, mask, bw, bh, 0, 0); err != nil {
+		return 0, err
+	}
+
+	width, height := ds.RasterXSize(), ds.RasterYSize()
+	gt := ds.GeoTransform()
+
+	values := make([]float64, width*height)
+	if err := band.IO(gdal.Read, 0, 0, width, height, values, width, height, 0, 0); err != nil {
+		return 0, err
+	}
+
+	count := 0
+	for r := 0; r < height; r++ {
+		y := gt[3] + (float64(r)+0.5)*gt[5]
+		for c := 0; c < width; c++ {
+			v := values[r*width+c]
+			if math.IsNaN(v) || (has && v == nodata) {
+				continue
+			}
+
+			x := gt[0] + (float64(c)+0.5)*gt[1]
+			bc := int(math.Floor((x - bgt[0]) / bgt[1]))
+			br := int(math.Floor((y - bgt[3]) / bgt[5]))
+			if bc < 0 || bc >= bw || br < 0 || br >= bh {
+				continue
+			}
+
+			m := mask[br*bw+bc]
+			if math.IsNaN(m) || (base_has && m == base_nodata) {
+				continue
+			}
+
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+func valued_cells(ds gdal.Dataset) (int, error) {
+	band := ds.RasterBand(1)
+	nodata, has := band.NoDataValue()
+	width, height := ds.RasterXSize(), ds.RasterYSize()
+
+	const rows = 256
+	valued := 0
+
+	for y := 0; y < height; y += rows {
+		n := min(rows, height-y)
+		values := make([]float64, width*n)
+		if err := band.IO(gdal.Read, 0, y, width, n, values, width, n, 0, 0); err != nil {
+			return 0, err
+		}
+		for _, v := range values {
+			if !math.IsNaN(v) && !(has && v == nodata) {
+				valued++
+			}
+		}
+	}
+
+	return valued, nil
+}
+
+// sample_grid reads band 1 and returns a lookup that reports emptiness by the
+// band's nodata value.
+func sample_grid(ds gdal.Dataset) (func(r, c int) (float64, bool), bool) {
+	band := ds.RasterBand(1)
+	nodata, has := band.NoDataValue()
+	width, height := ds.RasterXSize(), ds.RasterYSize()
+
+	values := make([]float64, width*height)
+	if err := band.IO(gdal.Read, 0, 0, width, height, values, width, height, 0, 0); err != nil {
+		return nil, false
+	}
+
+	return func(r, c int) (float64, bool) {
+		v := values[r*width+c]
+		return v, !math.IsNaN(v) && !(has && v == nodata)
+	}, true
 }
 
 func noop_reporter(string, ...any) string { return "" }
@@ -371,109 +725,6 @@ func band_count(f filename) int {
 	defer ds.Close()
 
 	return ds.RasterCount()
-}
-
-// display_band_matches checks rebuilt against published: same grid, three
-// Float32 bands, and band 1 holding the same value in every cell, where a
-// cell counts as empty by nodata, or by an alpha band in the published one.
-func display_band_matches(published, rebuilt filename) error {
-	dp, err := gdal.Open(published, gdal.ReadOnly)
-	if err != nil {
-		return err
-	}
-	defer dp.Close()
-
-	dr, err := gdal.Open(rebuilt, gdal.ReadOnly)
-	if err != nil {
-		return err
-	}
-	defer dr.Close()
-
-	width, height := dp.RasterXSize(), dp.RasterYSize()
-
-	if width != dr.RasterXSize() || height != dr.RasterYSize() {
-		return fmt.Errorf("size %dx%d vs %dx%d", width, height, dr.RasterXSize(), dr.RasterYSize())
-	}
-
-	if !geotransforms_equal(dp.GeoTransform(), dr.GeoTransform()) {
-		return fmt.Errorf("geotransform %v vs %v", dp.GeoTransform(), dr.GeoTransform())
-	}
-
-	if !projections_equal(dp.Projection(), dr.Projection()) {
-		return errors.New("projection differs")
-	}
-
-	if dr.RasterCount() != 3 {
-		return fmt.Errorf("%d bands, want 3", dr.RasterCount())
-	}
-
-	for i := 1; i <= 3; i++ {
-		if dt := dr.RasterBand(i).RasterDataType(); dt != gdal.Float32 {
-			return fmt.Errorf("band %d is %v, want Float32", i, dt)
-		}
-	}
-
-	pb := dp.RasterBand(1)
-	pnodata, phas := pb.NoDataValue()
-
-	var alpha *gdal.RasterBand
-	for i := 2; i <= dp.RasterCount(); i++ {
-		if b := dp.RasterBand(i); b.ColorInterp() == gdal.CI_AlphaBand {
-			alpha = &b
-		}
-	}
-
-	rb := dr.RasterBand(1)
-	rnodata, rhas := rb.NoDataValue()
-
-	empty := func(v, nodata float64, has bool) bool {
-		return math.IsNaN(v) || (has && v == nodata)
-	}
-
-	const rows = 256
-	var differ, holes, cells int
-
-	for y := 0; y < height; y += rows {
-		n := min(rows, height-y)
-
-		p := make([]float64, width*n)
-		r := make([]float64, width*n)
-
-		if err := pb.IO(gdal.Read, 0, y, width, n, p, width, n, 0, 0); err != nil {
-			return err
-		}
-		if err := rb.IO(gdal.Read, 0, y, width, n, r, width, n, 0, 0); err != nil {
-			return err
-		}
-
-		var a []float64
-		if alpha != nil {
-			a = make([]float64, width*n)
-			if err := alpha.IO(gdal.Read, 0, y, width, n, a, width, n, 0, 0); err != nil {
-				return err
-			}
-		}
-
-		for k := range p {
-			pe := empty(p[k], pnodata, phas) || (a != nil && a[k] == 0)
-			re := empty(r[k], rnodata, rhas)
-
-			switch {
-			case pe != re:
-				holes++
-			case !pe && float32(p[k]) != float32(r[k]):
-				differ++
-			}
-		}
-
-		cells += width * n
-	}
-
-	if differ > 0 || holes > 0 {
-		return fmt.Errorf("band 1: %d of %d values differ, %d cells empty in one only", differ, cells, holes)
-	}
-
-	return nil
 }
 
 // Rasters written by different GDAL versions can differ in the last bits of
