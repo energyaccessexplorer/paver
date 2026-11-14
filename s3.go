@@ -14,6 +14,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -51,8 +53,36 @@ func s3config_get(name string) (_ s3config, err error) {
 	return
 }
 
+// A "local" bucket is a directory: Directory is where objects are written and
+// Bucket the URL they are served from.
+const local_provider = "local"
+
 func s3endpoint(s3 s3config, key string) string {
+	if s3.Provider == local_provider {
+		return strings.TrimRight(s3.Bucket, "/") + "/" + key
+	}
+
 	return fmt.Sprintf("https://%s.%s/%s/%s", s3.Bucket, s3.Provider, s3.Directory, key)
+}
+
+func localput(fname filename, s3 s3config) bool {
+	if err := os.MkdirAll(s3.Directory, 0755); err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+
+	content, err := os.ReadFile(fname)
+	if err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+
+	if err := os.WriteFile(filepath.Join(s3.Directory, _uuid(fname)), content, 0644); err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+
+	return true
 }
 
 func (p routine_params) url(fname filename) string {
@@ -60,6 +90,10 @@ func (p routine_params) url(fname filename) string {
 }
 
 func s3put(fname filename, s3 s3config) bool {
+	if s3.Provider == local_provider {
+		return localput(fname, s3)
+	}
+
 	file, err := os.Open(fname)
 	if err != nil {
 		logger.Println(err.Error())

@@ -12,6 +12,12 @@ func cleanup(keeps []filename, deletes []filename, w reporter, s3 s3config) erro
 	trash(deletes...)
 
 	for _, f := range keeps {
+		if is_geotiff(f) {
+			if err := raster_deliver(f, w); err != nil {
+				return err
+			}
+		}
+
 		w("%s -> S3", f)
 		if !s3put(f, s3) {
 			return errors.New("s3 upload failed: " + f)
