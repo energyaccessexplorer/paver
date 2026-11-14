@@ -244,12 +244,16 @@ func routine_csv_points(w reporter, p routine_params) (string, error) {
 	return jsonstr, nil
 }
 
-func routine_crop_raster(w reporter, p routine_params) (string, error) {
+func crop_raster_output(w reporter, p routine_params) (filename, error) {
 	in := p.Dataset
 	in = maybe_zip(in)
 	in = maybe_shp(in)
 
-	cropped, err := raster_crop(in, p.Base, p.Reference, p.Config, w)
+	return raster_crop(in, p.Base, p.Reference, p.Config, w)
+}
+
+func routine_crop_raster(w reporter, p routine_params) (string, error) {
+	cropped, err := crop_raster_output(w, p)
 	if err != nil {
 		return "", err
 	}

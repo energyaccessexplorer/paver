@@ -19,6 +19,10 @@ import (
 	"os/exec"
 )
 
+// deliverable_version names the encoding; bump it when deliverable_options
+// changes so `paver repave` redoes what it already did.
+const deliverable_version = "1"
+
 const deliverable_strip_rows = 64
 
 func deliverable_options(predictor string) []string {
