@@ -150,9 +150,6 @@ func raster_proximity(in filename, w reporter) (filename, error) {
 		"VALUES=1",
 		"USE_INPUT_NODATA=YES",
 		fmt.Sprintf("MAXDIST=%d", 1024),
-		"-co", "COMPRESS=DEFLATE",
-		"-co", "PREDICTOR=1",
-		"-co", "ZLEVEL=9",
 	}
 
 	ds := drv.CreateCopy(out, src, 0, []string{}, gdal.DummyProgress, nil)
