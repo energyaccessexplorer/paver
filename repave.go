@@ -25,6 +25,7 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -557,32 +558,31 @@ func crop_values_from_source(src, base, out filename, resample string) (float64,
 		return 1, nil
 	}
 
-	values, ok := sample_grid(o)
-	if !ok {
-		return 1, nil
-	}
-
-	sb := s.RasterBand(1)
-	source_nodata, source_has := sb.NoDataValue()
-	sgt := s.GeoTransform()
-	sw, sh := s.RasterXSize(), s.RasterYSize()
-	source := make([]float64, sw*sh)
-	if err := sb.IO(gdal.Read, 0, 0, sw, sh, source, sw, sh, 0, 0); err != nil {
-		return 0, err
-	}
-
 	const samples = 2000
 	const step = 7 // coprimes with typical widths, to walk the grid
 
+	sgt := s.GeoTransform()
+	sw, sh := s.RasterXSize(), s.RasterYSize()
 	gt := b.GeoTransform()
 	bw, bh := b.RasterXSize(), b.RasterYSize()
 
-	checked, got := 0, 0
+	type sample struct {
+		v      float64
+		sr, sc int
+	}
 
-	for i := 0; i < bw*bh && checked < samples; i += step {
+	var picked []sample
+
+	out_rows := strips_of(o)
+	for i := 0; i < bw*bh && len(picked) < samples; i += step {
 		r, c := (i/bw)%bh, i%bw
-		v, valued := values(r, c)
-		if !valued {
+
+		row, err := out_rows.rows(r, r)
+		if err != nil {
+			return 0, err
+		}
+		v := row[c]
+		if out_rows.empty(v) {
 			continue
 		}
 
@@ -595,34 +595,45 @@ func crop_values_from_source(src, base, out filename, resample string) (float64,
 			continue
 		}
 
+		picked = append(picked, sample{v, sr, sc})
+	}
+
+	if len(picked) < 100 {
+		return 1, nil
+	}
+
+	// In source row order, so the source is read one strip at a time.
+	sort.Slice(picked, func(a, b int) bool { return picked[a].sr < picked[b].sr })
+
+	source := strips_of(s)
+	got := 0
+
+	for _, p := range picked {
+		r0, r1 := max(p.sr-1, 0), min(p.sr+1, sh-1)
+		rows, err := source.rows(r0, r1)
+		if err != nil {
+			return 0, err
+		}
+
 		// Nearest may take either pixel whose area holds the centre, so a value
 		// from the 3x3 neighbourhood counts as the source's.
 		matched := false
-		for dr := -1; dr <= 1 && !matched; dr++ {
-			for dc := -1; dc <= 1 && !matched; dc++ {
-				r2, c2 := sr+dr, sc+dc
-				if r2 < 0 || r2 >= sh || c2 < 0 || c2 >= sw {
+		for r2 := r0; r2 <= r1 && !matched; r2++ {
+			for c2 := max(p.sc-1, 0); c2 <= min(p.sc+1, sw-1) && !matched; c2++ {
+				sv := rows[(r2-r0)*sw+c2]
+				if source.empty(sv) {
 					continue
 				}
-				sv := source[r2*sw+c2]
-				if math.IsNaN(sv) || (source_has && sv == source_nodata) {
-					continue
-				}
-				matched = v == sv
+				matched = p.v == sv
 			}
 		}
 
-		checked++
 		if matched {
 			got++
 		}
 	}
 
-	if checked < 100 {
-		return 1, nil
-	}
-
-	return float64(got) / float64(checked), nil
+	return float64(got) / float64(len(picked)), nil
 }
 
 // crop_retains_coverage: the rebuild publishes at least as much of the
@@ -673,45 +684,39 @@ func crop_retains_coverage(published, base, out filename) error {
 // mask. Both are read on their own grids: a cell centre maps to a base pixel
 // arithmetically because the projections match.
 func valued_inside(ds, base gdal.Dataset) (int, error) {
-	band := ds.RasterBand(1)
-	nodata, has := band.NoDataValue()
-
-	bb := base.RasterBand(1)
-	base_nodata, base_has := bb.NoDataValue()
 	bgt := base.GeoTransform()
 	bw, bh := base.RasterXSize(), base.RasterYSize()
+	mask := strips_of(base)
 
-	mask := make([]float64, bw*bh)
-	if err := bb.IO(gdal.Read, 0, 0, bw, bh, mask, bw, bh, 0, 0); err != nil {
-		return 0, err
-	}
-
-	width, height := ds.RasterXSize(), ds.RasterYSize()
+	height := ds.RasterYSize()
 	gt := ds.GeoTransform()
-
-	values := make([]float64, width*height)
-	if err := band.IO(gdal.Read, 0, 0, width, height, values, width, height, 0, 0); err != nil {
-		return 0, err
-	}
+	values := strips_of(ds)
 
 	count := 0
 	for r := 0; r < height; r++ {
 		y := gt[3] + (float64(r)+0.5)*gt[5]
-		for c := 0; c < width; c++ {
-			v := values[r*width+c]
-			if math.IsNaN(v) || (has && v == nodata) {
+		br := int(math.Floor((y - bgt[3]) / bgt[5]))
+		if br < 0 || br >= bh {
+			continue
+		}
+
+		row, err := values.rows(r, r)
+		if err != nil {
+			return 0, err
+		}
+		inside, err := mask.rows(br, br)
+		if err != nil {
+			return 0, err
+		}
+
+		for c, v := range row {
+			if values.empty(v) {
 				continue
 			}
 
 			x := gt[0] + (float64(c)+0.5)*gt[1]
 			bc := int(math.Floor((x - bgt[0]) / bgt[1]))
-			br := int(math.Floor((y - bgt[3]) / bgt[5]))
-			if bc < 0 || bc >= bw || br < 0 || br >= bh {
-				continue
-			}
-
-			m := mask[br*bw+bc]
-			if math.IsNaN(m) || (base_has && m == base_nodata) {
+			if bc < 0 || bc >= bw || mask.empty(inside[bc]) {
 				continue
 			}
 
@@ -746,22 +751,50 @@ func valued_cells(ds gdal.Dataset) (int, error) {
 	return valued, nil
 }
 
-// sample_grid reads band 1 and returns a lookup that reports emptiness by the
-// band's nodata value.
-func sample_grid(ds gdal.Dataset) (func(r, c int) (float64, bool), bool) {
+// strips reads band 1 a strip of rows at a time, for checks that walk down a
+// raster: a national grid at 10 m is too large to read whole.
+type strips struct {
+	band          gdal.RasterBand
+	width, height int
+	nodata        float64
+	has_nodata    bool
+
+	first, count int
+	values       []float64
+}
+
+// About 16 MB of float64s.
+var strip_cells = 1 << 21
+
+func strips_of(ds gdal.Dataset) *strips {
 	band := ds.RasterBand(1)
 	nodata, has := band.NoDataValue()
-	width, height := ds.RasterXSize(), ds.RasterYSize()
 
-	values := make([]float64, width*height)
-	if err := band.IO(gdal.Read, 0, 0, width, height, values, width, height, 0, 0); err != nil {
-		return nil, false
+	return &strips{band: band, width: ds.RasterXSize(), height: ds.RasterYSize(), nodata: nodata, has_nodata: has}
+}
+
+// rows returns rows r0 to r1, row-major, reading a new strip from r0 when the
+// current one does not hold them all.
+func (s *strips) rows(r0, r1 int) ([]float64, error) {
+	if r0 < s.first || r1 >= s.first+s.count {
+		n := min(max(strip_cells/s.width, r1-r0+1), s.height-r0)
+		if cap(s.values) < n*s.width {
+			s.values = make([]float64, n*s.width)
+		}
+		s.values = s.values[:n*s.width]
+
+		if err := s.band.IO(gdal.Read, 0, r0, s.width, n, s.values, s.width, n, 0, 0); err != nil {
+			s.count = 0
+			return nil, err
+		}
+		s.first, s.count = r0, n
 	}
 
-	return func(r, c int) (float64, bool) {
-		v := values[r*width+c]
-		return v, !math.IsNaN(v) && !(has && v == nodata)
-	}, true
+	return s.values[(r0-s.first)*s.width : (r1-s.first+1)*s.width], nil
+}
+
+func (s *strips) empty(v float64) bool {
+	return math.IsNaN(v) || (s.has_nodata && v == s.nodata)
 }
 
 func noop_reporter(string, ...any) string { return "" }
