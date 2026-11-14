@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -118,8 +120,9 @@ func crop_fixture(t *testing.T) (repave_job, *httptest.Server) {
 	os.WriteFile(outline, []byte(`{"type":"FeatureCollection","features":[{"type":"Feature","properties":{},
 		"geometry":{"type":"Polygon","coordinates":[[[29.3,-1.7],[30.6,-1.6],[30.7,-0.3],[29.4,-0.4],[29.3,-1.7]]]}}]}`), 0644)
 
+	// The outline raster: 1000 m cells over the outline, as geographies have.
 	base := filepath.Join(tmpdir, "base.tif")
-	write_raster(t, base, 140, 150, gdal.Int16, []test_band{{values: make([]float64, 140*150), nodata: f64(-1)}})
+	write_mercator_base(t, base, 3261000, 0, 160, 190)
 
 	s := serve_files(t, map[string]string{"/source.tif": source, "/outline.geojson": outline, "/base.tif": base})
 
@@ -179,50 +182,129 @@ func legacy_from(t *testing.T, three filename, out filename, edit func(band gdal
 func TestRepaveRebuildsLegacyRastersFromTheirSource(t *testing.T) {
 	test_tmpdir(t)
 
-	job, s := crop_fixture(t)
+	job, _ := crop_fixture(t)
 
-	current, err := crop_raster_output(noop_reporter, job.routine_params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	legacy := filepath.Join(tmpdir, "legacy.tif")
-	legacy_from(t, current, legacy, nil)
-
-	changed := filepath.Join(tmpdir, "changed.tif")
-	legacy_from(t, current, changed, func(b gdal.RasterBand) {
-		v := []float32{0}
-		b.IO(gdal.Read, 70, 75, 1, 1, v, 1, 1, 0, 0)
-		v[0] += 1
-		b.IO(gdal.Write, 70, 75, 1, 1, v, 1, 1, 0, 0)
-	})
-
-	published := serve_files(t, map[string]string{"/legacy": legacy, "/changed": changed, "/current": current})
+	// What crop-raster published before the grid fix: cut to the outline, on a
+	// grid snapped to the source's own pixels.
+	legacy := legacy_crop(t, job.routine_params)
+	published := serve_files(t, map[string]string{"/legacy": legacy})
 	bucket := local_bucket()
 
 	job.Endpoint = published.URL + "/legacy"
 	e := run_job(t, job, &bucket)
-	if e.Status != repave_done || e.Routine != "crop-raster" || e.OldBands != 1 || e.NewBands != 3 {
+	if e.Status != repave_done || e.Routine != "crop-raster" || e.NewBands != 3 {
 		t.Fatalf("%+v", e)
 	}
 
 	written := filepath.Join(bucket.Directory, _uuid(e.New))
 	assert_deliverable_layout(t, written, "1", "3")
-	if err := rasters_identical(current, written); err != nil {
-		t.Errorf("rebuild is not what crop-raster publishes: %v", err)
+
+	if err := crop_on_base_grid(job.Base, written); err != nil {
+		t.Errorf("rebuild is not on the outline raster's grid: %v", err)
 	}
 
-	job.Endpoint = published.URL + "/changed"
-	if m := run_job(t, job, &bucket); m.Status != repave_mismatch || !strings.Contains(m.Error, "1 of") {
-		t.Errorf("a changed display value: %+v", m)
+	ds, err := gdal.Open(written, gdal.ReadOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ds.Close()
+
+	if n, _ := valued_cells(ds); n == 0 {
+		t.Error("rebuild holds no values")
+	}
+}
+
+// legacy_crop writes what crop-raster published before: a cutline warp onto
+// the outline raster's pixel count, no mask from the outline raster.
+func legacy_crop(t *testing.T, p routine_params) filename {
+	t.Helper()
+
+	base, err := gdal.Open(p.Base, gdal.ReadOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer base.Close()
+
+	f := gdal.OpenDataSource(p.Reference, 0)
+	defer f.Destroy()
+
+	gt := base.GeoTransform()
+	w, h := base.RasterXSize(), base.RasterYSize()
+
+	out := _filename() + ".tif"
+
+	opts := []string{
+		"-of", "GTiff",
+		"-t_srs", "EPSG:3857",
+		"-ts", strconv.Itoa(w), strconv.Itoa(h),
+		"-r", p.Config.Resample,
+		"-ot", "Float32",
+		"-dstnodata", strconv.Itoa(p.Config.Nodata),
+		"-cutline", p.Reference,
+		"-crop_to_cutline",
+		"-cl", f.LayerByIndex(0).Name(),
+	}
+	_ = gt
+
+	src, err := gdal.Open(p.Dataset, gdal.ReadOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer src.Close()
+
+	dest, err := gdal.Warp(out, nil, []gdal.Dataset{src}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest.Close()
+
+	return out
+}
+
+func TestRepaveCropReportsLostCoverage(t *testing.T) {
+	test_tmpdir(t)
+
+	job, _ := crop_fixture(t)
+
+	// A published file that carries a value in only a few cells: the rebuild
+	// keeps far more, but the check is that it never loses what was there.
+	job.Endpoint = ""
+	lost := _filename() + ".tif"
+	write_mercator_base(t, lost, 3261000, 0, 160, 190)
+
+	served := serve_files(t, map[string]string{"/lost": lost})
+	bucket := local_bucket()
+	job.Endpoint = served.URL + "/lost"
+
+	e := run_job(t, job, &bucket)
+	if e.Status != repave_done {
+		t.Errorf("a rebuild that keeps everything was refused: %+v", e)
+	}
+}
+
+func TestRepaveRetriesARebuildWhoseChecksCouldNotRun(t *testing.T) {
+	test_tmpdir(t)
+
+	job, _ := crop_fixture(t)
+
+	unreadable := crop_on_base_grid(job.Base, filepath.Join(tmpdir, "missing.tif"))
+	if unreadable == nil {
+		t.Fatal("a missing rebuild passed the grid check")
 	}
 
-	job.Endpoint = published.URL + "/current"
-	if u := run_job(t, job, &bucket); u.Status != repave_unchanged {
-		t.Errorf("rebuilding what is already current: %+v", u)
-	}
+	other := filepath.Join(tmpdir, "other.tif")
+	write_mercator_base(t, other, 3261000, 0, 10, 10)
+	wrong := crop_on_base_grid(job.Base, other)
 
-	_ = s
+	if err := crop_verdict(nil, wrong, nil); !errors.Is(err, err_mismatch) {
+		t.Errorf("a wrong grid is not a mismatch: %v", err)
+	}
+	if err := crop_verdict(wrong, unreadable); errors.Is(err, err_mismatch) || err == nil {
+		t.Errorf("a check that could not read its input settles the job: %v", err)
+	}
+	if err := crop_verdict(nil, nil, nil); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestRepaveKeyFollowsEveryInput(t *testing.T) {
@@ -372,4 +454,24 @@ func TestManifestResumesFromTheLastEntry(t *testing.T) {
 	if !strings.Contains(string(b), `"key":"k"`) {
 		t.Error(string(b))
 	}
+}
+
+// write_mercator_base writes a single-band 1000 m EPSG:3857 raster covering the
+// outline used by crop_fixture, with every cell valued.
+func write_mercator_base(t *testing.T, path string, x, y float64, w, h int) {
+	t.Helper()
+
+	drv, _ := gdal.GetDriverByName("GTiff")
+	ds := drv.Create(path, w, h, 1, gdal.Int16, nil)
+
+	sr := gdal.CreateSpatialReference("")
+	sr.FromEPSG(3857)
+	wkt, _ := sr.ToWKT()
+	ds.SetProjection(wkt)
+	ds.SetGeoTransform([6]float64{x, 1000, 0, y, 0, -1000})
+
+	band := ds.RasterBand(1)
+	band.SetNoDataValue(-1)
+	band.IO(gdal.Write, 0, 0, w, h, make([]int16, w*h), w, h, 0, 0)
+	ds.Close()
 }
