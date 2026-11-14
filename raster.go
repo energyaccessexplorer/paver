@@ -201,6 +201,15 @@ func raster_zeros(in filename, res int, w reporter) (filename, error) {
 	return out, err
 }
 
+// GDAL's sum kernel holds ~300 bytes per source cell of a warp chunk, outside
+// the -wm budget: near 3 GB once a source fills the default chunk. Smaller
+// chunks would bound it, but the kernel drops contributions at chunk seams. One
+// sum warp of a large source runs at a time.
+var (
+	large_sum_cells = 4 << 20
+	large_sums      = make(chan struct{}, 1)
+)
+
 func raster_crop(in filename, base filename, ref filename, rc raster_config, w reporter) (filename, error) {
 	w("RASTER CROP (multi-band)")
 
@@ -213,9 +222,10 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 	out := _filename()
 
 	// One band to warp: a source with an alpha band would warp it into the
-	// output too, and the tool reads band 1 as the display band.
+	// output too, and the tool reads band 1 as the display band. Kept
+	// compressed: a national 90 m source is billions of cells.
 	display_src := _filename() + ".tif"
-	if err := gdal_translate([]string{"-b", "1", in, display_src}); err != nil {
+	if err := gdal_translate([]string{"-b", "1", "-co", "TILED=YES", "-co", "COMPRESS=LZW", "-co", "BIGTIFF=IF_SAFER", "-co", "NUM_THREADS=ALL_CPUS", in, display_src}); err != nil {
 		return "", err
 	}
 	defer trash(display_src)
@@ -267,6 +277,11 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 		}
 		opts = append(opts, gtiff_opts...)
 
+		if method == "sum" && one.RasterXSize()*one.RasterYSize() > large_sum_cells {
+			large_sums <- struct{}{}
+			defer func() { <-large_sums }()
+		}
+
 		release := capture()
 		dest, err := gdal.Warp(band_out, nil, []gdal.Dataset{one}, opts)
 
@@ -280,12 +295,22 @@ func raster_crop(in filename, base filename, ref filename, rc raster_config, w r
 	}
 
 	var bands []filename
-	defer func() { trash(bands...) }()
+	warped := map[string]filename{}
+	defer func() {
+		for _, f := range warped {
+			trash(f)
+		}
+	}()
 
+	// A display band resampled by sum or average is that band: warped once.
 	for i, method := range []string{rc.Resample, "sum", "average"} {
-		band, err := warp(method)
-		if err != nil {
-			return "", fmt.Errorf("band %d (%s): %w", i+1, method, err)
+		band, ok := warped[method]
+		if !ok {
+			var err error
+			if band, err = warp(method); err != nil {
+				return "", fmt.Errorf("band %d (%s): %w", i+1, method, err)
+			}
+			warped[method] = band
 		}
 		bands = append(bands, band)
 		w(" band %d (%s) done", i+1, method)

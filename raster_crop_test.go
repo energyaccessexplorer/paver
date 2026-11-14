@@ -4,6 +4,7 @@ import (
 	"math"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/energyaccessexplorer/gdal"
 )
@@ -294,4 +295,216 @@ func total_of_band(t *testing.T, ds gdal.Dataset, i int) float64 {
 	}
 
 	return total
+}
+
+func band_values(t *testing.T, f filename, i int) []float64 {
+	t.Helper()
+
+	ds := open_ro(t, f)
+	band := ds.RasterBand(i)
+	w, h := ds.RasterXSize(), ds.RasterYSize()
+
+	values := make([]float64, w*h)
+	if err := band.IO(gdal.Read, 0, 0, w, h, values, w, h, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	return values
+}
+
+func same_bits(a, b []float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if math.Float64bits(a[i]) != math.Float64bits(b[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestCropDisplayBandBySumOrAverageIsThatBand(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	for method, band := range map[string]int{"sum": 2, "average": 3} {
+		p.Config.Resample = method
+
+		out, err := raster_crop(p.Dataset, p.Base, p.Reference, p.Config, noop_reporter)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if !same_bits(band_values(t, out, 1), band_values(t, out, band)) {
+			t.Errorf("display band by %s differs from band %d", method, band)
+		}
+		if same_bits(band_values(t, out, 2), band_values(t, out, 3)) {
+			t.Error("sum and average bands are equal: the fixture tells nothing")
+		}
+	}
+}
+
+// A source's alpha band is not warped, and does not mask band 1.
+func TestCropWarpsBandOneOfASourceWithAlpha(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	plain, err := raster_crop(p.Dataset, p.Base, p.Reference, p.Config, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := open_ro(t, p.Dataset)
+	w, h := src.RasterXSize(), src.RasterYSize()
+	values, _ := read_whole(t, src)
+
+	alpha := make([]float64, len(values))
+	for i := range alpha {
+		if i%3 != 0 {
+			alpha[i] = 255
+		}
+	}
+
+	with_alpha := filepath.Join(tmpdir, "with-alpha.tif")
+	drv, _ := gdal.GetDriverByName("GTiff")
+	ds := drv.Create(with_alpha, w, h, 2, gdal.Float32, nil)
+	ds.SetProjection(src.Projection())
+	ds.SetGeoTransform(src.GeoTransform())
+	ds.RasterBand(2).SetColorInterp(gdal.CI_AlphaBand)
+	for i, v := range [][]float64{values, alpha} {
+		f32 := make([]float32, len(v))
+		for k := range v {
+			f32[k] = float32(v[k])
+		}
+		ds.RasterBand(i+1).IO(gdal.Write, 0, 0, w, h, f32, w, h, 0, 0)
+	}
+	ds.Close()
+
+	out, err := raster_crop(with_alpha, p.Base, p.Reference, p.Config, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n := band_count(out); n != 3 {
+		t.Fatalf("%d bands", n)
+	}
+	for i := 1; i <= 3; i++ {
+		if !same_bits(band_values(t, plain, i), band_values(t, out, i)) {
+			t.Errorf("band %d differs from the crop of the source without its alpha band", i)
+		}
+	}
+}
+
+func TestCropLeavesOnlyItsOutput(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	before, _ := filepath.Glob(filepath.Join(tmpdir, "*"))
+
+	out, err := raster_crop(p.Dataset, p.Base, p.Reference, p.Config, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after, _ := filepath.Glob(filepath.Join(tmpdir, "*"))
+	if len(after) != len(before)+1 {
+		t.Errorf("%d files before, %d after: %v", len(before), len(after), after)
+	}
+	if _, err := gdal.Open(out, gdal.ReadOnly); err != nil {
+		t.Error(err)
+	}
+}
+
+// Large enough that the sum warp runs in several chunks: the total survives
+// the seams.
+func TestCropSumKeepsTheSourceTotal(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	const n = 3000
+	source := filepath.Join(tmpdir, "fine.tif")
+	drv, _ := gdal.GetDriverByName("GTiff")
+	ds := drv.Create(source, n, n, 1, gdal.Float32, []string{"TILED=YES"})
+	sr := gdal.CreateSpatialReference("")
+	sr.FromEPSG(4326)
+	wkt, _ := sr.ToWKT()
+	ds.SetProjection(wkt)
+	// Inside the outline raster, which spans 29.29-30.73 E and 0-1.70 S.
+	ds.SetGeoTransform([6]float64{29.4, 1.2 / n, 0, -0.2, 0, -1.3 / n})
+	values := make([]float32, n*n)
+	total := 0.0
+	for i := range values {
+		values[i] = float32((i*7919)%101) / 10
+		total += float64(values[i])
+	}
+	ds.RasterBand(1).SetNoDataValue(-32767)
+	ds.RasterBand(1).IO(gdal.Write, 0, 0, n, n, values, n, n, 0, 0)
+	ds.Close()
+
+	p.Config.Resample = "near"
+	out, err := raster_crop(source, p.Base, p.Reference, p.Config, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := total_of_band(t, open_ro(t, out), 2)
+	if math.Abs(got-total) > 1e-3*total {
+		t.Errorf("sum band total %.1f, source total %.1f", got, total)
+	}
+}
+
+func TestCropRunsOneLargeSumWarpAtATime(t *testing.T) {
+	test_tmpdir(t)
+
+	p := crop_params(t)
+
+	keep := large_sum_cells
+	t.Cleanup(func() { large_sum_cells = keep })
+
+	crop := func() chan error {
+		done := make(chan error, 1)
+		go func() {
+			_, err := raster_crop(p.Dataset, p.Base, p.Reference, p.Config, noop_reporter)
+			done <- err
+		}()
+		return done
+	}
+
+	// Another large sum warp holds the slot.
+	large_sums <- struct{}{}
+
+	large_sum_cells = 0
+	waiting := crop()
+	select {
+	case err := <-waiting:
+		t.Fatalf("a large sum warp ran while another held the slot (%v)", err)
+	case <-time.After(3 * time.Second):
+	}
+
+	<-large_sums
+	if err := <-waiting; err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case large_sums <- struct{}{}:
+		defer func() { <-large_sums }()
+	case <-time.After(time.Second):
+		t.Fatal("the warp kept the slot after it finished")
+	}
+
+	large_sum_cells = 1 << 30
+	select {
+	case err := <-crop():
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("a small sum warp waited for the slot")
+	}
 }
