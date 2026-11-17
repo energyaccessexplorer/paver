@@ -95,7 +95,7 @@ func repave_main(args []string) error {
 	list := fs.String("list", "", "Job list: JSON lines from repave.sql, or one raster endpoint per line")
 	manifest := fs.String("manifest", "", "JSON-lines manifest; appended to, and read to resume")
 	bucket := fs.String("bucket", "", "Bucket to write to (from -buckets); none is a dry run")
-	apply := fs.Bool("apply", false, "Allow writing to a bucket that is not local")
+	apply := fs.Bool("apply", false, "Allow writing to a bucket that is not marked scratch")
 	jobs := fs.Int("j", 2, "Jobs run at once")
 	api := fs.String("api", "", "PostgREST URL: repoint datasets at what -bucket received; the token is read from "+api_token_env)
 	rollback := fs.String("rollback", "", "Repoints file to roll back through -api; without -api, only list")
@@ -130,8 +130,8 @@ func repave_main(args []string) error {
 		if err != nil {
 			return err
 		}
-		if conf.Provider != local_provider && !*apply {
-			return fmt.Errorf("bucket '%s' is not local: writing to it needs -apply", *bucket)
+		if !conf.scratch() && !*apply {
+			return fmt.Errorf("bucket '%s' is not scratch: writing to it needs -apply", *bucket)
 		}
 		target = &conf
 	}
@@ -289,7 +289,7 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 		e.Bucket = target.Name
 	}
 
-	if target != nil && target.Provider != local_provider && !strings.HasPrefix(j.Endpoint, s3endpoint(*target, "")) {
+	if target != nil && !target.scratch() && !strings.HasPrefix(j.Endpoint, s3endpoint(*target, "")) {
 		e.Status, e.Error = repave_skipped, "outside the target bucket"
 		return e
 	}

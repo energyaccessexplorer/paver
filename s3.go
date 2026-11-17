@@ -28,6 +28,16 @@ type s3config struct {
 	Directory string `json:"directory"`
 	ACL       string `json:"acl"`
 	Region    string `json:"region"`
+
+	// Providers that speak the S3 protocol somewhere other than AWS: Endpoint
+	// is the API base requests are signed for, Public the base of the object's
+	// public URL.
+	Endpoint string `json:"endpoint"`
+	Public   string `json:"public"`
+
+	// Contents are disposable, so repave may fill the bucket from any source
+	// without a flag (see repave_main and repave_one).
+	Scratch bool `json:"scratch"`
 }
 
 func s3config_get(name string) (_ s3config, err error) {
@@ -57,9 +67,30 @@ func s3config_get(name string) (_ s3config, err error) {
 // Bucket the URL they are served from.
 const local_provider = "local"
 
+// A "supabase" bucket is Supabase Storage's S3 protocol, which addresses
+// buckets path-style: the object key is Directory joined to key.
+const supabase_provider = "supabase"
+
+func (s3 s3config) scratch() bool {
+	return s3.Provider == local_provider || s3.Scratch
+}
+
+// s3key is the object's key within a path-style bucket: the directory prefix,
+// when there is one, joined to key.
+func s3key(s3 s3config, key string) string {
+	if s3.Directory == "" {
+		return key
+	}
+
+	return strings.Trim(s3.Directory, "/") + "/" + key
+}
+
 func s3endpoint(s3 s3config, key string) string {
-	if s3.Provider == local_provider {
+	switch s3.Provider {
+	case local_provider:
 		return strings.TrimRight(s3.Bucket, "/") + "/" + key
+	case supabase_provider:
+		return fmt.Sprintf("%s/%s/%s", strings.TrimRight(s3.Public, "/"), s3.Bucket, s3key(s3, key))
 	}
 
 	return fmt.Sprintf("https://%s.%s/%s/%s", s3.Bucket, s3.Provider, s3.Directory, key)
@@ -98,18 +129,12 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 		return localput(fname, key, s3)
 	}
 
-	file, err := os.Open(fname)
-	if err != nil {
-		logger.Println(err.Error())
-		return false
-	}
-
 	content, err := os.ReadFile(fname)
 	if err != nil {
 		return false
 	}
 
-	endpoint, err := s3presigned(s3.Name, "PUT", s3.Directory, key)
+	endpoint, err := s3presigned(s3, "PUT", key)
 	if err != nil {
 		return false
 	}
@@ -125,8 +150,6 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 	if err != nil {
 		return false
 	}
-
-	file.Close()
 
 	c, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -159,12 +182,20 @@ func s3has(s3 s3config, key string, size int64) bool {
 	return r.StatusCode == http.StatusOK && r.ContentLength == size
 }
 
-func s3presigned(platform string, method string, directory string, filename string) (url string, err error) {
+// s3presigned_by_name presigns for a bucket named in the buckets file, taking
+// the object's prefix from the caller rather than from the entry.
+func s3presigned_by_name(platform string, method string, directory string, filename string) (string, error) {
 	conf, err := s3config_get(platform)
 	if err != nil {
-		return
+		return "", err
 	}
 
+	conf.Directory = directory
+
+	return s3presigned(conf, method, filename)
+}
+
+func s3presigned(conf s3config, method string, key string) (url string, err error) {
 	ctx, cancelFn := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancelFn()
 
@@ -183,18 +214,23 @@ func s3presigned(platform string, method string, directory string, filename stri
 		return
 	}
 
-	cli := s3.NewPresignClient(s3.NewFromConfig(c))
+	cli := s3.NewPresignClient(s3.NewFromConfig(c, func(o *s3.Options) {
+		if conf.Provider == supabase_provider {
+			o.BaseEndpoint = aws.String(conf.Endpoint)
+			o.UsePathStyle = true
+		}
+	}))
 
 	var request *v4.PresignedHTTPRequest
 	if method == "GET" {
 		request, err = cli.PresignGetObject(ctx, &s3.GetObjectInput{
 			Bucket: aws.String(conf.Bucket),
-			Key:    aws.String(directory + "/" + filename),
+			Key:    aws.String(s3key(conf, key)),
 		}, s3.WithPresignExpires(10*time.Minute))
 	} else if method == "PUT" {
 		request, err = cli.PresignPutObject(ctx, &s3.PutObjectInput{
 			Bucket: aws.String(conf.Bucket),
-			Key:    aws.String(directory + "/" + filename),
+			Key:    aws.String(s3key(conf, key)),
 		}, s3.WithPresignExpires(10*time.Minute))
 	} else {
 		err = errors.New("Parameter 'method' is incorrect")
