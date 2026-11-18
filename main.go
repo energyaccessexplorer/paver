@@ -38,12 +38,21 @@ var (
 type filename = string
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "repave" {
-		if err := repave_main(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "repave", "infer":
+			var err error
+			if os.Args[1] == "repave" {
+				err = repave_main(os.Args[2:])
+			} else {
+				err = infer_main(os.Args[2:])
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
 		}
-		return
 	}
 
 	parse_flags()

@@ -24,7 +24,10 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
+	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -39,12 +42,17 @@ type repave_job struct {
 	Endpoint  string `json:"endpoint"`
 	DatasetID string `json:"dataset,omitempty"`
 	Geography string `json:"geography,omitempty"`
+	Root      string `json:"root,omitempty"`
 	Routine   string `json:"routine,omitempty"`
 
 	routine_params
 }
 
 const repave_reencode = "re-encode"
+
+// A copy stores a file as it is: anything repave cannot or need not rebuild,
+// moved so that every file a dataset names is in the target bucket.
+const repave_copy = "copy"
 
 func (j repave_job) routine() string {
 	if j.Routine == "" {
@@ -59,6 +67,50 @@ type job_ref struct{ endpoint, geography string }
 
 func (j repave_job) ref() job_ref { return job_ref{j.Endpoint, j.Geography} }
 
+// object is where a result is written: named by its hash and the original's
+// extension, under its country and geography when the job names them, so
+// moving a country's files is moving one prefix.
+func (j repave_job) object(sha256 string) string {
+	name := sha256 + endpoint_extension(j.Endpoint)
+	if j.Root == "" || j.Geography == "" {
+		return name
+	}
+
+	return j.Root + "/" + j.Geography + "/" + name
+}
+
+// is_html catches a link that answers with a page (a sign-in, a warning, an
+// error) in place of the file it names.
+func is_html(f filename) bool {
+	file, err := os.Open(f)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+
+	return strings.HasPrefix(http.DetectContentType(head[:n]), "text/html")
+}
+
+var extension_regexp = regexp.MustCompile(`^\.[a-z0-9]{1,8}$`)
+
+// endpoint_extension keeps downloads of copied files openable by name.
+func endpoint_extension(endpoint string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+
+	ext := strings.ToLower(path.Ext(u.Path))
+	if !extension_regexp.MatchString(ext) {
+		return ""
+	}
+
+	return ext
+}
+
 func (e repave_entry) ref() job_ref { return job_ref{e.Old, e.Geography} }
 
 type repave_entry struct {
@@ -66,6 +118,7 @@ type repave_entry struct {
 	New       string `json:"new,omitempty"`
 	Dataset   string `json:"dataset,omitempty"`
 	Geography string `json:"geography,omitempty"`
+	Root      string `json:"root,omitempty"`
 	Routine   string `json:"routine,omitempty"`
 	Key       string `json:"key,omitempty"`
 	Bucket    string `json:"bucket,omitempty"`
@@ -74,6 +127,7 @@ type repave_entry struct {
 	NewBytes  int64  `json:"new_bytes,omitempty"`
 	SHA256    string `json:"sha256,omitempty"`
 	Warning   string `json:"warning,omitempty"`
+	Copied    bool   `json:"copied,omitempty"`
 	OldBands  int    `json:"old_bands,omitempty"`
 	NewBands  int    `json:"new_bands,omitempty"`
 	Predictor string `json:"predictor,omitempty"`
@@ -96,6 +150,7 @@ func repave_main(args []string) error {
 	manifest := fs.String("manifest", "", "JSON-lines manifest; appended to, and read to resume")
 	bucket := fs.String("bucket", "", "Bucket to write to (from -buckets); none is a dry run")
 	apply := fs.Bool("apply", false, "Allow writing to a bucket that is not marked scratch")
+	move := fs.Bool("move", false, "Move every raster into -bucket: accept sources stored elsewhere, and copy as they are those re-encoding cannot improve")
 	jobs := fs.Int("j", 2, "Jobs run at once")
 	api := fs.String("api", "", "PostgREST URL: repoint datasets at what -bucket received; the token is read from "+api_token_env)
 	rollback := fs.String("rollback", "", "Repoints file to roll back through -api; without -api, only list")
@@ -134,6 +189,10 @@ func repave_main(args []string) error {
 			return fmt.Errorf("bucket '%s' is not scratch: writing to it needs -apply", *bucket)
 		}
 		target = &conf
+	}
+
+	if *move && target == nil {
+		return errors.New("-move needs -bucket")
 	}
 
 	var p *postgrest
@@ -186,7 +245,7 @@ func repave_main(args []string) error {
 			for job := range queue {
 				key, err := repave_key(job)
 				if err != nil {
-					record(repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Geography: job.Geography, Routine: job.routine(), Status: repave_failed, Error: err.Error()})
+					record(repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Geography: job.Geography, Root: job.Root, Routine: job.routine(), Status: repave_failed, Error: err.Error()})
 					continue
 				}
 
@@ -194,11 +253,12 @@ func repave_main(args []string) error {
 				e, ok := previous[job.ref()]
 				mu.Unlock()
 
-				if ok && repave_settled(e, *bucket, key) {
+				// Moving copies what an earlier run left unchanged.
+				if ok && repave_settled(e, *bucket, key) && !(*move && e.Status == repave_unchanged) {
 					continue
 				}
 
-				record(repave_one(job, key, target))
+				record(repave_one(job, key, target, *move))
 			}
 		}()
 	}
@@ -240,6 +300,9 @@ func repave_settled(e repave_entry, bucket string, key string) bool {
 // repave_key identifies a job's inputs: what it reads, and how it encodes.
 func repave_key(j repave_job) (string, error) {
 	parts := []string{j.routine(), deliverable_version}
+	if j.routine() == repave_copy {
+		parts = parts[:1]
+	}
 
 	reads := []string{j.Endpoint}
 	if j.routine() == "crop-raster" {
@@ -283,13 +346,14 @@ func object_version(url string) (string, error) {
 	return url + " " + r.Header.Get("Last-Modified") + " " + r.Header.Get("Content-Length"), nil
 }
 
-func repave_one(j repave_job, key string, target *s3config) repave_entry {
-	e := repave_entry{Old: j.Endpoint, Dataset: j.DatasetID, Geography: j.Geography, Routine: j.routine(), Key: key}
+func repave_one(j repave_job, key string, target *s3config, move bool) repave_entry {
+	e := repave_entry{Old: j.Endpoint, Dataset: j.DatasetID, Geography: j.Geography, Root: j.Root, Routine: j.routine(), Key: key}
 	if target != nil {
 		e.Bucket = target.Name
 	}
 
-	if target != nil && !target.scratch() && !strings.HasPrefix(j.Endpoint, s3endpoint(*target, "")) {
+	outside := target != nil && !strings.HasPrefix(j.Endpoint, s3endpoint(*target, ""))
+	if outside && !target.scratch() && !move {
 		e.Status, e.Error = repave_skipped, "outside the target bucket"
 		return e
 	}
@@ -302,6 +366,16 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 	defer trash(in)
 
 	e.OldBytes = file_size(in)
+
+	if j.routine() == repave_copy {
+		if is_html(in) && !strings.HasPrefix(endpoint_extension(j.Endpoint), ".htm") {
+			e.Status, e.Error = repave_failed, "got a web page, not the file"
+			return e
+		}
+
+		e.Copied, e.NewBytes = true, e.OldBytes
+		return repave_store(e, j, in, target)
+	}
 
 	if !is_geotiff(in) {
 		e.Status, e.Error = repave_skipped, "not a GeoTIFF"
@@ -349,29 +423,43 @@ func repave_one(j repave_job, key string, target *s3config) repave_entry {
 
 	if unchanged {
 		trash(out)
-		e.Status = repave_unchanged
-		return e
+		if !move || !outside {
+			e.Status = repave_unchanged
+			return e
+		}
+
+		out, e.Copied, e.Predictor = in, true, ""
+		e.NewBytes, e.NewBands = e.OldBytes, e.OldBands
 	}
 
+	if !e.Copied {
+		defer trash(out)
+	}
+
+	return repave_store(e, j, out, target)
+}
+
+// repave_store writes out to target under the job's object name; a dry run
+// only records it as verified.
+func repave_store(e repave_entry, j repave_job, out filename, target *s3config) repave_entry {
 	if target == nil {
-		trash(out)
 		e.Status = repave_verified
 		return e
 	}
 
-	defer trash(out)
-
+	var err error
 	if e.SHA256, err = file_sha256(out); err != nil {
 		e.Status, e.Error = repave_failed, err.Error()
 		return e
 	}
 
-	if !s3has(*target, e.SHA256, e.NewBytes) && !s3put_as(out, e.SHA256, *target) {
+	object := j.object(e.SHA256)
+	if !s3has(*target, object, e.NewBytes) && !s3put_as(out, object, *target) {
 		e.Status, e.Error = repave_failed, "upload failed"
 		return e
 	}
 
-	e.Status, e.New = repave_done, s3endpoint(*target, e.SHA256)
+	e.Status, e.New = repave_done, s3endpoint(*target, object)
 
 	return e
 }
@@ -951,21 +1039,24 @@ func repave_summary(entries map[job_ref]repave_entry) {
 		}
 
 		t.count[e.Status]++
+		if e.Copied {
+			t.count["copied"]++
+		}
 		if e.Status == repave_done || e.Status == repave_verified {
 			t.before += e.OldBytes
 			t.after += e.NewBytes
 		}
 	}
 
-	for _, r := range []string{repave_reencode, "crop-raster"} {
+	for _, r := range []string{repave_reencode, "crop-raster", repave_copy} {
 		t := by[r]
 		if t == nil {
 			continue
 		}
 
 		c := t.count
-		fmt.Printf("%s: done %d, verified %d, unchanged %d, mismatch %d, skipped %d, failed %d",
-			r, c[repave_done], c[repave_verified], c[repave_unchanged], c[repave_mismatch], c[repave_skipped], c[repave_failed])
+		fmt.Printf("%s: done %d (copied %d), verified %d, unchanged %d, mismatch %d, skipped %d, failed %d",
+			r, c[repave_done], c["copied"], c[repave_verified], c[repave_unchanged], c[repave_mismatch], c[repave_skipped], c[repave_failed])
 
 		if t.before > 0 {
 			fmt.Printf("; %d -> %d bytes (%.1f%%)", t.before, t.after, 100*float64(t.after)/float64(t.before))

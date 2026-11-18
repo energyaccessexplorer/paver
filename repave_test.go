@@ -45,7 +45,7 @@ func run_job(t *testing.T, j repave_job, target *s3config) repave_entry {
 		t.Fatal(err)
 	}
 
-	return repave_one(j, key, target)
+	return repave_one(j, key, target, false)
 }
 
 func TestRepaveReencodesUnderNewKeys(t *testing.T) {
@@ -113,7 +113,7 @@ func TestRepaveRefusesEndpointsOutsideAnS3Bucket(t *testing.T) {
 
 	bucket := s3config{Name: "world", Provider: "s3.amazonaws.com", Bucket: "wri-public-data", Directory: "EnergyAccess/paver-outputs"}
 
-	e := repave_one(repave_job{Endpoint: "https://energyaccess-storage.s3.amazonaws.com/paver-outputs/x"}, "k", &bucket)
+	e := repave_one(repave_job{Endpoint: "https://energyaccess-storage.s3.amazonaws.com/paver-outputs/x"}, "k", &bucket, false)
 	if e.Status != repave_skipped || e.Bucket != "world" {
 		t.Errorf("%+v", e)
 	}

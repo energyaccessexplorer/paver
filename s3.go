@@ -12,8 +12,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
+	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -34,6 +36,12 @@ type s3config struct {
 	// public URL.
 	Endpoint string `json:"endpoint"`
 	Public   string `json:"public"`
+
+	// With a service key, a supabase bucket is written through the Storage
+	// API (its base, e.g. https://<ref>.supabase.co/storage/v1) instead of
+	// presigned S3 PUTs.
+	Storage    string `json:"storage"`
+	ServiceKey string `json:"service_key"`
 
 	// Contents are disposable, so repave may fill the bucket from any source
 	// without a flag (see repave_main and repave_one).
@@ -129,6 +137,10 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 		return localput(fname, key, s3)
 	}
 
+	if s3.Provider == supabase_provider && s3.ServiceKey != "" {
+		return storageput(fname, key, s3)
+	}
+
 	content, err := os.ReadFile(fname)
 	if err != nil {
 		return false
@@ -159,6 +171,58 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 
 	if r.StatusCode > 399 {
 		logger.Println(r.Status, c)
+		return false
+	}
+
+	return true
+}
+
+func content_type(key string) string {
+	if t := mime.TypeByExtension(path.Ext(key)); t != "" {
+		return t
+	}
+
+	return "application/octet-stream"
+}
+
+func storageput(fname filename, key string, s3 s3config) bool {
+	file, err := os.Open(fname)
+	if err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+	defer file.Close()
+
+	st, err := file.Stat()
+	if err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+
+	u := fmt.Sprintf("%s/object/%s/%s", strings.TrimRight(s3.Storage, "/"), s3.Bucket, s3key(s3, key))
+
+	q, err := http.NewRequest("POST", u, file)
+	if err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+
+	q.ContentLength = st.Size()
+	q.Header.Set("apikey", s3.ServiceKey)
+	q.Header.Set("Authorization", "Bearer "+s3.ServiceKey)
+	q.Header.Set("Content-Type", content_type(key))
+	q.Header.Set("x-upsert", "true")
+
+	r, err := http_client.Do(q)
+	if err != nil {
+		logger.Println(err.Error())
+		return false
+	}
+	defer r.Body.Close()
+
+	if r.StatusCode > 299 {
+		b, _ := io.ReadAll(r.Body)
+		logger.Println("POST", u, r.Status, string(b))
 		return false
 	}
 

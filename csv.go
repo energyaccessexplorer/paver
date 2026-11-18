@@ -131,8 +131,18 @@ func csv_points(in filename, lnglat [2]string, sel []string) (filename, error) {
 		sel = []string{"null"}
 	}
 
-	os.Rename(in, in+".csv")
-	in = in + ".csv"
+	// The CSV driver reads a layer by the file's own name, and the caller's
+	// file may be reused: open a copy under a name of our own.
+	csvfile := _filename() + ".csv"
+	content, err := os.ReadFile(in)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(csvfile, content, 0644); err != nil {
+		return "", err
+	}
+	defer trash(csvfile)
+	in = csvfile
 
 	openopts := []string{
 		fmt.Sprintf("X_POSSIBLE_NAMES=%s", lnglat[0]),

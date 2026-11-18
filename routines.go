@@ -11,6 +11,12 @@ func cleanup(keeps []filename, deletes []filename, w reporter, s3 s3config) erro
 
 	trash(deletes...)
 
+	// Without a bucket nothing is published: infer keeps the outputs where
+	// they are to compare them with what was.
+	if s3.Name == "" {
+		return nil
+	}
+
 	for _, f := range keeps {
 		if is_geotiff(f) {
 			if err := raster_deliver(f, w); err != nil {
