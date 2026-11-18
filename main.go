@@ -23,6 +23,7 @@ var COMMIT_SHA string
 var (
 	run_server = true
 	pubkeyfile string
+	jwksfile   string
 	tmpdir     string
 	socket     string
 	buckets    string
@@ -64,6 +65,7 @@ func main() {
 
 func parse_flags() {
 	flag.StringVar(&pubkeyfile, "pubkey", "", "Public key file to check JWTs")
+	flag.StringVar(&jwksfile, "jwks", "", "JWKS document (path or address) to check JWTs against; covers RS256 (legacy) and ES256 (Supabase)")
 	flag.StringVar(&socket, "socket", "/tmp/paver-server.sock", "Socket file to run on")
 	flag.StringVar(&logfilename, "log", "/tmp/paver.log", "")
 	flag.StringVar(&tmpdir, "tmpdir", "/tmp", "")

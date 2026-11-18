@@ -47,14 +47,19 @@ func serve() {
 			{"/commit", nil, H{"GET": _commit}},
 			{"/status", nil, H{"GET": _status}},
 			{"/socket", nil, H{"GET": _socket}},
-			{"/routines", []string{"*"}, H{"POST": _routines}},
-			{"/s3-presigned", []string{"*"}, H{"GET": _s3presigned_handler}},
+			// srv verifies RS256 only, which rejects Supabase Auth's ES256
+			// before a handler runs. These are checked by auth_check instead.
+			{"/routines", nil, H{"POST": _routines}},
+			{"/s3-presigned", nil, H{"GET": _s3presigned_handler}},
 		},
 		pubkeyfile,
 	)
 }
 
 func server_setup() {
+	if err := auth_setup(pubkeyfile, jwksfile); err != nil {
+		logger.Fatal("auth_setup: ", err.Error())
+	}
 	_, err := os.Stat(tmpdir)
 	if os.IsNotExist(err) {
 		logger.Println("Specified temporary directory does not exist. Creating...")
@@ -185,6 +190,14 @@ var server_routines = map[string]server_routine{
 }
 
 func _routines(w http.ResponseWriter, r *http.Request) {
+	c, err := auth_check(r, []string{"*"})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusForbidden)
+		return
+	}
+
+	logger.Printf("[REQUEST] routine=%s user=%s", r.URL.Query().Get("routine"), c.user())
+
 	q := r.URL.Query().Get("routine")
 	if q == "" {
 		http.Error(w, "Routine (q)uery parameter is not optional", 400)
@@ -296,7 +309,7 @@ func _check(w http.ResponseWriter, r *http.Request) {
 }
 
 func _commit(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, COMMIT_SHA)
+	fmt.Fprint(w, COMMIT_SHA)
 }
 
 func _s3presigned_handler(w http.ResponseWriter, r *http.Request) {
@@ -306,6 +319,11 @@ func _s3presigned_handler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 
 	case "GET":
+		if _, err := auth_check(r, []string{"*"}); err != nil {
+			http.Error(w, err.Error(), http.StatusForbidden)
+			return
+		}
+
 		q := r.URL.Query()
 		directory := q.Get("directory")
 		filename := q.Get("filename")
