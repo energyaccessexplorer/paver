@@ -38,6 +38,23 @@ var (
 type filename = string
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "repave", "infer":
+			var err error
+			if os.Args[1] == "repave" {
+				err = repave_main(os.Args[2:])
+			} else {
+				err = infer_main(os.Args[2:])
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
+
 	parse_flags()
 
 	capture_setup()

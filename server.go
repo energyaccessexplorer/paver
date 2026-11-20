@@ -43,14 +43,14 @@ func serve() {
 	srv.Run(
 		socket,
 		[]srv.Route{
-			{"/check", nil, H{"GET": _check}},
-			{"/commit", nil, H{"GET": _commit}},
-			{"/status", nil, H{"GET": _status}},
-			{"/socket", nil, H{"GET": _socket}},
+			{Path: "/check", Roles: nil, Methods: H{"GET": _check}},
+			{Path: "/commit", Roles: nil, Methods: H{"GET": _commit}},
+			{Path: "/status", Roles: nil, Methods: H{"GET": _status}},
+			{Path: "/socket", Roles: nil, Methods: H{"GET": _socket}},
 			// srv verifies RS256 only, which rejects Supabase Auth's ES256
 			// before a handler runs. These are checked by auth_check instead.
-			{"/routines", nil, H{"POST": _routines}},
-			{"/s3-presigned", nil, H{"GET": _s3presigned_handler}},
+			{Path: "/routines", Roles: nil, Methods: H{"POST": _routines}},
+			{Path: "/s3-presigned", Roles: nil, Methods: H{"GET": _s3presigned_handler}},
 		},
 		pubkeyfile,
 	)
@@ -338,7 +338,7 @@ func _s3presigned_handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		url, err := s3presigned(platform, method, directory, filename)
+		url, err := s3presigned_by_name(platform, method, directory, filename)
 		if err != nil {
 			logger.Println("_s3presigned_handler failed: s3presigned: \n", err.Error(), q)
 			http.Error(w, "S3 configuration error", 500)
