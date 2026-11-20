@@ -12,10 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
-	"mime"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -124,21 +122,23 @@ func localput(fname filename, key string, s3 s3config) bool {
 	return true
 }
 
-func (p routine_params) url(fname filename) string {
-	return s3endpoint(p.S3, _uuid(fname))
-}
-
-func s3put(fname filename, s3 s3config) bool {
-	return s3put_as(fname, _uuid(fname), s3)
+// object_key names a paver output by its uuid and what the file is.
+func object_key(fname filename) string {
+	ext, _ := file_kind(fname, "")
+	return _uuid(fname) + ext
 }
 
 func s3put_as(fname filename, key string, s3 s3config) bool {
+	return s3put_cached(fname, key, s3, upload_cache_control)
+}
+
+func s3put_cached(fname filename, key string, s3 s3config, cache string) bool {
 	if s3.Provider == local_provider {
 		return localput(fname, key, s3)
 	}
 
 	if s3.Provider == supabase_provider && s3.ServiceKey != "" {
-		return storageput(fname, key, s3)
+		return storageput(fname, key, s3, cache)
 	}
 
 	content, err := os.ReadFile(fname)
@@ -157,6 +157,9 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 	if err != nil {
 		return false
 	}
+
+	q.Header.Set("Content-Type", key_type(key, fname))
+	q.Header.Set("Cache-Control", cache)
 
 	r, err := client.Do(q)
 	if err != nil {
@@ -177,15 +180,15 @@ func s3put_as(fname filename, key string, s3 s3config) bool {
 	return true
 }
 
-func content_type(key string) string {
-	if t := mime.TypeByExtension(path.Ext(key)); t != "" {
-		return t
-	}
+// Objects are named by content hash or a fresh uuid, so they never change
+// under the same name: they can be cached at the edge and in browsers for a
+// year, with no invalidation.
+const upload_cache_control = "public, max-age=31536000, immutable"
 
-	return "application/octet-stream"
-}
+// An object the apps name by path can be replaced under the same name.
+const named_cache_control = "public, max-age=3600"
 
-func storageput(fname filename, key string, s3 s3config) bool {
+func storageput(fname filename, key string, s3 s3config, cache string) bool {
 	file, err := os.Open(fname)
 	if err != nil {
 		logger.Println(err.Error())
@@ -210,8 +213,9 @@ func storageput(fname filename, key string, s3 s3config) bool {
 	q.ContentLength = st.Size()
 	q.Header.Set("apikey", s3.ServiceKey)
 	q.Header.Set("Authorization", "Bearer "+s3.ServiceKey)
-	q.Header.Set("Content-Type", content_type(key))
+	q.Header.Set("Content-Type", key_type(key, fname))
 	q.Header.Set("x-upsert", "true")
+	q.Header.Set("Cache-Control", cache)
 
 	r, err := http_client.Do(q)
 	if err != nil {

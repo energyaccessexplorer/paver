@@ -315,23 +315,27 @@ func TestCleanupDeliversRastersAndLeavesVectorsAlone(t *testing.T) {
 
 	bucket := s3config{Name: "local", Provider: local_provider, Bucket: "http://test.localhost/out/", Directory: filepath.Join(tmpdir, "bucket")}
 
-	if err := cleanup([]filename{raster, vectors}, nil, noopReporter, bucket); err != nil {
+	urls, err := cleanup([]filename{raster, vectors}, nil, noopReporter, bucket)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	published := filepath.Join(bucket.Directory, _uuid(raster))
+	published := filepath.Join(bucket.Directory, _uuid(raster)+".tif")
 	assert_deliverable_layout(t, published, "1", "2")
 	if err := rasters_identical(reference, published); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := os.ReadFile(filepath.Join(bucket.Directory, _uuid(vectors)))
+	got, err := os.ReadFile(filepath.Join(bucket.Directory, _uuid(vectors)+".geojson"))
 	if err != nil || string(got) != string(geojson) {
 		t.Errorf("vectors published as %q (%v)", got, err)
 	}
 
-	if url := s3endpoint(bucket, _uuid(raster)); url != "http://test.localhost/out/"+_uuid(raster) {
-		t.Errorf("local endpoint %s", url)
+	if url := urls[raster]; url != "http://test.localhost/out/"+_uuid(raster)+".tif" {
+		t.Errorf("raster endpoint %s", url)
+	}
+	if url := urls[vectors]; url != "http://test.localhost/out/"+_uuid(vectors)+".geojson" {
+		t.Errorf("vectors endpoint %s", url)
 	}
 }
 
@@ -364,7 +368,7 @@ func TestCsvPointsPublishesADeliverableProximityRaster(t *testing.T) {
 		t.Fatalf("%s: %v", res, err)
 	}
 
-	published := filepath.Join(bucket.Directory, _uuid(out.Raster))
+	published := filepath.Join(bucket.Directory, filepath.Base(out.Raster))
 	assert_deliverable_layout(t, published, "1", "2")
 
 	ds, err := gdal.Open(published, gdal.ReadOnly)

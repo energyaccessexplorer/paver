@@ -45,6 +45,10 @@ type repave_job struct {
 	Root      string `json:"root,omitempty"`
 	Routine   string `json:"routine,omitempty"`
 
+	// Object is the key a copy is written under as it is, for a file the
+	// apps name by path rather than through a dataset.
+	Object string `json:"object,omitempty"`
+
 	routine_params
 }
 
@@ -67,11 +71,12 @@ type job_ref struct{ endpoint, geography string }
 
 func (j repave_job) ref() job_ref { return job_ref{j.Endpoint, j.Geography} }
 
-// object is where a result is written: named by its hash and the original's
-// extension, under its country and geography when the job names them, so
-// moving a country's files is moving one prefix.
-func (j repave_job) object(sha256 string) string {
-	name := sha256 + endpoint_extension(j.Endpoint)
+// object is where a result is written: named by its hash and what the file
+// is, under its country and geography when the job names them, so moving a
+// country's files is moving one prefix.
+func (j repave_job) object(sha256 string, out filename) string {
+	ext, _ := file_kind(out, endpoint_extension(j.Endpoint))
+	name := sha256 + ext
 	if j.Root == "" || j.Geography == "" {
 		return name
 	}
@@ -453,8 +458,12 @@ func repave_store(e repave_entry, j repave_job, out filename, target *s3config) 
 		return e
 	}
 
-	object := j.object(e.SHA256)
-	if !s3has(*target, object, e.NewBytes) && !s3put_as(out, object, *target) {
+	object, cache := j.object(e.SHA256, out), upload_cache_control
+	if j.Object != "" {
+		object, cache = j.Object, named_cache_control
+	}
+
+	if !s3has(*target, object, e.NewBytes) && !s3put_cached(out, object, *target, cache) {
 		e.Status, e.Error = repave_failed, "upload failed"
 		return e
 	}

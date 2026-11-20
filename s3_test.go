@@ -21,6 +21,7 @@ type fake_storage struct {
 	mu      sync.Mutex
 	objects map[string][]byte
 	types   map[string]string
+	caches  map[string]string
 	puts    []string
 }
 
@@ -64,6 +65,9 @@ func (f *fake_storage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.objects[key] = body
 		if f.types != nil {
 			f.types[key] = r.Header.Get("Content-Type")
+			if f.caches != nil {
+				f.caches[key] = r.Header.Get("Cache-Control")
+			}
 		}
 		f.puts = append(f.puts, key)
 		w.WriteHeader(http.StatusOK)
@@ -272,11 +276,11 @@ func TestRepaveOneWritesToSupabase(t *testing.T) {
 		t.Fatalf("%+v", e)
 	}
 
-	if want := s3endpoint(target, e.SHA256); e.New != want {
+	if want := s3endpoint(target, e.SHA256+".tif"); e.New != want {
 		t.Errorf("new endpoint %s, want %s", e.New, want)
 	}
 
-	stored, ok := st.objects["/geotiff-test/repave/"+e.SHA256]
+	stored, ok := st.objects["/geotiff-test/repave/"+e.SHA256+".tif"]
 	if !ok {
 		t.Fatalf("object not stored: %v", st.puts)
 	}
@@ -392,7 +396,7 @@ func TestRepaveMoveCopiesWhatItCannotImprove(t *testing.T) {
 	if re.Status != repave_done || re.Copied {
 		t.Fatalf("re-encoded: %+v", re)
 	}
-	if want := target.Public + "/paver-outputs/country/region/" + re.SHA256; re.New != want {
+	if want := target.Public + "/paver-outputs/country/region/" + re.SHA256 + ".tif"; re.New != want {
 		t.Errorf("new endpoint %s, want %s", re.New, want)
 	}
 
@@ -402,7 +406,7 @@ func TestRepaveMoveCopiesWhatItCannotImprove(t *testing.T) {
 	}
 
 	original, _ := os.ReadFile(deliverable)
-	if stored := st.objects["/paver-outputs/country/region/"+cp.SHA256]; string(stored) != string(original) {
+	if stored := st.objects["/paver-outputs/country/region/"+cp.SHA256+".tif"]; string(stored) != string(original) {
 		t.Errorf("stored %d bytes, not the original's %d", len(stored), len(original))
 	}
 
@@ -450,12 +454,43 @@ func TestRepaveCopiesFilesAsTheyAre(t *testing.T) {
 	if string(st.objects[object]) != string(original) {
 		t.Errorf("stored %q", st.objects[object])
 	}
-	if st.types[object] != "application/geo+json" && !strings.HasPrefix(st.types[object], "application/") {
+	if st.types[object] != "application/geo+json" {
 		t.Errorf("content type %q", st.types[object])
 	}
 
 	if again := repave_one(j, key, &target, true); again.New != e.New || len(st.puts) != 1 {
 		t.Errorf("a second copy uploaded again: %+v, puts %v", again, st.puts)
+	}
+}
+
+// A file the apps name by path keeps its key and can be replaced under it.
+func TestRepaveCopiesANamedFileUnderItsKey(t *testing.T) {
+	test_tmpdir(t)
+
+	logo := filepath.Join(tmpdir, "logo")
+	os.WriteFile(logo, []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`), 0644)
+
+	s := serve_files(t, map[string]string{"/EnergyAccess/website/logos/unido.svg": logo})
+
+	st := &fake_storage{objects: map[string][]byte{}, types: map[string]string{}, caches: map[string]string{}}
+	srv := httptest.NewServer(st)
+	t.Cleanup(srv.Close)
+
+	target := storage_bucket(srv)
+
+	j := repave_job{Endpoint: s.URL + "/EnergyAccess/website/logos/unido.svg", Routine: repave_copy, Object: "EnergyAccess/website/logos/unido.svg"}
+	key, err := repave_key(j)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	e := repave_one(j, key, &target, true)
+	object := "/paver-outputs/EnergyAccess/website/logos/unido.svg"
+	if e.Status != repave_done || e.New != target.Public+object {
+		t.Fatalf("%+v", e)
+	}
+	if st.types[object] != "image/svg+xml" || st.caches[object] != named_cache_control {
+		t.Errorf("stored as %q, %q", st.types[object], st.caches[object])
 	}
 }
 

@@ -66,14 +66,14 @@ func TestRepaveReencodesUnderNewKeys(t *testing.T) {
 	if e.Status != repave_done || e.Routine != repave_reencode {
 		t.Fatalf("%+v", e)
 	}
-	if e.New != s3endpoint(bucket, e.SHA256) {
+	if e.New != s3endpoint(bucket, e.SHA256+".tif") {
 		t.Errorf("new endpoint %s", e.New)
 	}
 	if e.NewBytes >= e.OldBytes {
 		t.Errorf("%d -> %d bytes", e.OldBytes, e.NewBytes)
 	}
 
-	written := filepath.Join(bucket.Directory, e.SHA256)
+	written := filepath.Join(bucket.Directory, e.SHA256+".tif")
 	if err := rasters_identical(raster, written); err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestRepaveRebuildsLegacyRastersFromTheirSource(t *testing.T) {
 		t.Fatalf("%+v", e)
 	}
 
-	written := filepath.Join(bucket.Directory, e.SHA256)
+	written := filepath.Join(bucket.Directory, e.SHA256+".tif")
 	assert_deliverable_layout(t, written, "1", "3")
 
 	if err := crop_on_base_grid(job.Base, written); err != nil {
