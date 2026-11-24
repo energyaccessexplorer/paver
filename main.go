@@ -38,6 +38,15 @@ var (
 type filename = string
 
 func main() {
+	// Reads of remote rasters meet connection resets and S3's or Storage's
+	// throttling; GDAL retries them, here and in the tools paver runs.
+	if os.Getenv("GDAL_HTTP_MAX_RETRY") == "" {
+		os.Setenv("GDAL_HTTP_MAX_RETRY", "5")
+	}
+	if os.Getenv("GDAL_HTTP_RETRY_DELAY") == "" {
+		os.Setenv("GDAL_HTTP_RETRY_DELAY", "2")
+	}
+
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "repave", "infer":
@@ -118,7 +127,8 @@ func _uuid(s string) string {
 
 func trash(files ...filename) {
 	for _, f := range files {
-		if err := os.Remove(f); err != nil {
+		// Not existing is the point: a step that failed left nothing to remove.
+		if err := os.Remove(f); err != nil && !os.IsNotExist(err) {
 			logger.Println(err.Error())
 		}
 	}

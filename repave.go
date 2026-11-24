@@ -14,6 +14,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -145,7 +146,8 @@ const (
 	repave_unchanged = "unchanged" // nothing to gain: keep the original
 	repave_mismatch  = "mismatch"  // a rebuild that differs where it must not; not written
 	repave_skipped   = "skipped"   // not a GeoTIFF, or outside the target bucket
-	repave_failed    = "failed"
+	repave_failed    = "failed"    // recoverable: the next attempt may succeed
+	repave_unusable  = "unusable"  // gone, forbidden, not the file it claims, or not one paver can process
 )
 
 func repave_main(args []string) error {
@@ -248,22 +250,42 @@ func repave_main(args []string) error {
 		go func() {
 			defer wg.Done()
 			for job := range queue {
-				key, err := repave_key(job)
-				if err != nil {
-					record(repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Geography: job.Geography, Root: job.Root, Routine: job.routine(), Status: repave_failed, Error: err.Error()})
-					continue
+				var e repave_entry
+
+				for attempt := 1; ; attempt++ {
+					key, err := repave_key(job)
+					if err != nil {
+						e = repave_entry{Old: job.Endpoint, Dataset: job.DatasetID, Geography: job.Geography, Root: job.Root, Routine: job.routine(), Status: repave_failed, Error: err.Error()}
+					} else {
+						mu.Lock()
+						prev, ok := previous[job.ref()]
+						mu.Unlock()
+
+						// Moving copies what an earlier run left unchanged.
+						if ok && repave_settled(prev, *bucket, key) && !(*move && prev.Status == repave_unchanged) {
+							e = repave_entry{}
+							break
+						}
+
+						e = repave_one(job, key, target, *move)
+					}
+
+					if e.Status != repave_failed || !transient(e.Error) || attempt == failure_attempts {
+						break
+					}
+
+					logger.Printf("%-9s %-11s %s (attempt %d of %d) %s", "retrying", job.routine(), job.Endpoint, attempt+1, failure_attempts, e.Error)
+					time.Sleep(failure_pause(attempt))
 				}
 
-				mu.Lock()
-				e, ok := previous[job.ref()]
-				mu.Unlock()
-
-				// Moving copies what an earlier run left unchanged.
-				if ok && repave_settled(e, *bucket, key) && !(*move && e.Status == repave_unchanged) {
+				if e.Status == "" {
 					continue
 				}
+				if e.Status == repave_failed && !transient(e.Error) {
+					e.Status = repave_unusable
+				}
 
-				record(repave_one(job, key, target, *move))
+				record(e)
 			}
 		}()
 	}
@@ -291,7 +313,8 @@ func repave_settled(e repave_entry, bucket string, key string) bool {
 	}
 
 	switch e.Status {
-	case repave_unchanged, repave_mismatch:
+	// The same inputs fail the same way.
+	case repave_unchanged, repave_mismatch, repave_unusable:
 		return true
 	case repave_skipped, repave_done:
 		return e.Bucket == bucket
@@ -334,7 +357,16 @@ var http_client = &http.Client{Timeout: 10 * time.Minute}
 
 // object_version is what changes when the object at url does.
 func object_version(url string) (string, error) {
-	r, err := http_client.Head(url)
+	var r *http.Response
+	var err error
+
+	// A dropped connection is not an answer.
+	for attempt := 1; attempt <= 3; attempt++ {
+		if r, err = http_client.Head(url); err == nil {
+			break
+		}
+		time.Sleep(time.Duration(attempt) * 2 * time.Second)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -934,12 +966,44 @@ func projections_equal(a, b string) bool {
 	return sa.IsSame(sb)
 }
 
+// A download is given up when it stops moving, not after a fixed time: a
+// source of several GB outlasts any.
+const download_idle = 2 * time.Minute
+
+var download_client = &http.Client{Transport: func() http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.ResponseHeaderTimeout = download_idle
+	return t
+}()}
+
+type idle_reader struct {
+	r     io.Reader
+	timer *time.Timer
+}
+
+func (i idle_reader) Read(p []byte) (int, error) {
+	n, err := i.r.Read(p)
+	i.timer.Reset(download_idle)
+	return n, err
+}
+
 func download(url string) (filename, error) {
-	r, err := http_client.Get(url)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	q, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+
+	r, err := download_client.Do(q)
 	if err != nil {
 		return "", err
 	}
 	defer r.Body.Close()
+
+	idle := time.AfterFunc(download_idle, cancel)
+	defer idle.Stop()
 
 	if r.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("GET %s: %s", url, r.Status)
@@ -951,7 +1015,7 @@ func download(url string) (filename, error) {
 		return "", err
 	}
 
-	if _, err := io.Copy(file, r.Body); err != nil {
+	if _, err := io.Copy(file, idle_reader{r.Body, idle}); err != nil {
 		file.Close()
 		trash(f)
 		return "", err
@@ -1064,8 +1128,8 @@ func repave_summary(entries map[job_ref]repave_entry) {
 		}
 
 		c := t.count
-		fmt.Printf("%s: done %d (copied %d), verified %d, unchanged %d, mismatch %d, skipped %d, failed %d",
-			r, c[repave_done], c["copied"], c[repave_verified], c[repave_unchanged], c[repave_mismatch], c[repave_skipped], c[repave_failed])
+		fmt.Printf("%s: done %d (copied %d), verified %d, unchanged %d, mismatch %d, skipped %d, failed %d (recoverable), unusable %d",
+			r, c[repave_done], c["copied"], c[repave_verified], c[repave_unchanged], c[repave_mismatch], c[repave_skipped], c[repave_failed], c[repave_unusable])
 
 		if t.before > 0 {
 			fmt.Printf("; %d -> %d bytes (%.1f%%)", t.before, t.after, 100*float64(t.after)/float64(t.before))
