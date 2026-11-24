@@ -47,12 +47,14 @@ import (
 // A check's verdict on a candidate. reproduced: every output identical.
 // equivalent: every output matches within a stated tolerance, which is what a
 // different GDAL build may cost. differs: the best candidate still differs.
-// failed: the routine could not run. unchecked: recorded before it ran.
+// failed: the routine could not run this time (see transient); unusable: it
+// cannot with these inputs. unchecked: recorded before it ran.
 const (
 	infer_reproduced = "reproduced"
 	infer_equivalent = "equivalent"
 	infer_differs    = "differs"
 	infer_failed     = "failed"
+	infer_unusable   = "unusable"
 	infer_unchecked  = "unchecked"
 )
 
@@ -68,10 +70,20 @@ const (
 	infer_epsilon  = 1e-6
 )
 
+var (
+	infer_keep    string
+	infer_explain bool
+)
+
+// The reference's simplification paver applied by itself before the dialog
+// sent one (paver ceace15, 2022), and its command line kept until 2026.
+const legacy_simplify float32 = 0.001
+
 // infer_candidate is one parameter set to try, with what chose it.
 type infer_candidate struct {
 	params   routine_params
 	describe string
+	routine  string // the one run, when not the job's own
 }
 
 // One line of the job list: a JSON object from params.sql.
@@ -102,9 +114,15 @@ type infer_check struct {
 	Outputs map[string]string `json:"outputs,omitempty"`
 	// How many parameter sets were run: more than one is the dialog's earlier
 	// choices not reproducing the file.
-	Candidates int    `json:"candidates"`
-	Note       string `json:"note,omitempty"`
-	At         string `json:"at"`
+	Candidates int `json:"candidates"`
+	// The share of cells that agree on the published grid, by band or resampling.
+	Agreement map[string]float64 `json:"agreement,omitempty"`
+	// How the recorded resampling's rebuild differs, on the published grid.
+	Profile *grid_profile `json:"profile,omitempty"`
+	// The grid check's criteria, for a crop raster.
+	Rules string `json:"rules,omitempty"`
+	Note  string `json:"note,omitempty"`
+	At    string `json:"at"`
 }
 
 // infer_entry is one manifest line: the dataset's column as inferred, plus
@@ -126,12 +144,15 @@ type infer_vectors_configuration struct {
 }
 
 var infer_routines = map[string]routine{
-	"admin-boundaries": routine_admin_boundaries,
-	"clip-proximity":   routine_clip_proximity,
-	"crop-raster":      routine_crop_raster,
-	"csv-points":       routine_csv_points,
-	"csv-raster":       routine_csv_raster,
-	"simplify":         routine_simplify,
+	"admin-boundaries":  routine_admin_boundaries,
+	"clip-proximity":    routine_clip_proximity,
+	"crop-raster":       routine_crop_raster,
+	crop_raster_2021:    routine_crop_raster_2021,
+	crop_raster_2026:    routine_crop_raster_2026,
+	clip_proximity_2021: routine_clip_proximity_2021,
+	"csv-points":        routine_csv_points,
+	"csv-raster":        routine_csv_raster,
+	"simplify":          routine_simplify,
 }
 
 func infer_main(args []string) error {
@@ -141,6 +162,8 @@ func infer_main(args []string) error {
 	manifest := fs.String("manifest", "", "JSON-lines manifest; appended to, and read to resume")
 	repoints := fs.String("repoints", "", "Repoints file: compare against the endpoints the datasets named before repave moved them")
 	jobs := fs.Int("j", 2, "Jobs run at once")
+	fs.StringVar(&infer_keep, "keep", "", "Keep each job's inputs, published outputs and best rebuild in DIR/<dataset>")
+	fs.BoolVar(&infer_explain, "explain", false, "Log every candidate's verdict, not only the one settled on")
 
 	fs.StringVar(&tmpdir, "tmpdir", os.TempDir(), "")
 
@@ -156,6 +179,9 @@ func infer_main(args []string) error {
 	if os.Getenv("GDAL_NUM_THREADS") == "" {
 		os.Setenv("GDAL_NUM_THREADS", "ALL_CPUS")
 	}
+
+	// Statistics GDAL would save beside every file it measures.
+	os.Setenv("GDAL_PAM_ENABLED", "NO")
 
 	if *list == "" || *manifest == "" {
 		return errors.New("infer needs -list and -manifest")
@@ -197,6 +223,13 @@ func infer_main(args []string) error {
 		mu.Lock()
 		defer mu.Unlock()
 
+		if e.Routine == "crop-raster" {
+			e.Check.Rules = grid_rules
+		}
+		if e.Check.Status == infer_failed && !transient(e.Check.Note) {
+			e.Check.Status = infer_unusable
+		}
+
 		j, _ := json.Marshal(e)
 		out.Write(append(j, '\n'))
 		previous[e.Dataset] = e
@@ -212,22 +245,51 @@ func infer_main(args []string) error {
 		go func() {
 			defer wg.Done()
 			for job := range queue {
-				key, err := infer_key(job)
+				var key string
+				var err error
+				for attempt := 1; ; attempt++ {
+					if key, err = infer_key(job); err == nil || !transient(err.Error()) || attempt == failure_attempts {
+						break
+					}
+					time.Sleep(failure_pause(attempt))
+				}
 				if err != nil {
+					// Not a verdict: what an earlier run settled stands.
+					mu.Lock()
+					prev, known := previous[job.Dataset]
+					mu.Unlock()
+
+					// A verdict by other criteria does not stand: recording the
+					// failure clears it.
+					if known && !(job.Routine == "crop-raster" && prev.Check.Rules != grid_rules) {
+						logger.Printf("%-11s %-16s %s %s (the previous verdict stands)", infer_failed, job.Routine, job.Dataset, err)
+						continue
+					}
+
 					record(infer_entry{Dataset: job.Dataset, Routine: job.Routine, Origin: infer_origin(job), Error: err.Error(),
 						Check: infer_check{Status: infer_failed, Note: err.Error(), At: infer_now()}})
 					continue
 				}
 
 				mu.Lock()
-				e, ok := previous[job.Dataset]
+				prev, ok := previous[job.Dataset]
 				mu.Unlock()
 
-				if ok && infer_settled(e, key) {
+				if ok && infer_settled(prev, key) {
+					logger.Printf("%-11s %-16s %s (settled %s, not run again)", prev.Check.Status, job.Routine, job.Dataset, prev.Check.At)
 					continue
 				}
 
-				record(infer_one(job, key))
+				var e infer_entry
+				for attempt := 1; ; attempt++ {
+					e = infer_one(job, key)
+					if e.Check.Status != infer_failed || !transient(e.Check.Note) || attempt == failure_attempts {
+						break
+					}
+					logger.Printf("%-11s %-16s %s (attempt %d of %d) %s", "retrying", job.Routine, job.Dataset, attempt+1, failure_attempts, e.Check.Note)
+					time.Sleep(failure_pause(attempt))
+				}
+				record(e)
 			}
 		}()
 	}
@@ -258,14 +320,15 @@ func infer_origin(j infer_job) string {
 }
 
 // infer_settled says a previous run's entry needs no more work, given the
-// job's key now. A run that could not be made is retried.
+// job's key now: only parameters that rebuilt the published outputs are. Any
+// other verdict is tried again, with whatever candidates the run has now.
 func infer_settled(e infer_entry, key string) bool {
 	if e.Key != key {
 		return false
 	}
 
 	switch e.Check.Status {
-	case infer_reproduced, infer_equivalent, infer_differs:
+	case infer_reproduced, infer_equivalent, infer_matched:
 		return true
 	default:
 		return false
@@ -276,6 +339,9 @@ func infer_settled(e infer_entry, key string) bool {
 // what it reads -- the sources, and the published files it is compared with.
 func infer_key(j infer_job) (string, error) {
 	parts := []string{j.Routine, deliverable_version}
+	if j.Routine == "crop-raster" {
+		parts = append(parts, grid_rules)
+	}
 
 	reads := []string{j.DatasetURL, j.Reference, j.Base}
 
@@ -377,6 +443,9 @@ func infer_one(j infer_job, key string) infer_entry {
 	defer infer_trash(map[string]filename{"dataseturl": src, "referenceurl": ref, "baseurl": base})
 	defer infer_trash(published)
 
+	infer_kept(j.Dataset, "", map[string]filename{"source": src, "reference": ref, "base": base}, false)
+	infer_kept(j.Dataset, "published-", published, false)
+
 	e.Params, e.Check = infer_settle(j, src, ref, base, published)
 
 	return e
@@ -397,13 +466,25 @@ func infer_settle(j infer_job, src, ref, base filename, published map[string]fil
 	for i, c := range candidates {
 		tried := i + 1
 
-		rebuilt, err := infer_run(j.Routine, c.params)
+		run := j.Routine
+		if c.routine != "" {
+			run = c.routine
+		}
+
+		rebuilt, err := infer_run(run, c.params)
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %s", c.describe, err.Error()))
+			if infer_explain {
+				logger.Printf("  %s candidate %d, %s: failed %s", j.Dataset, tried, c.describe, err)
+			}
 			continue
 		}
 
 		status, outputs, note := infer_verdict(published, rebuilt)
+		if infer_explain {
+			logger.Printf("  %s candidate %d, %s: %s %s", j.Dataset, tried, c.describe, status, note)
+		}
+		infer_kept(j.Dataset, "rebuilt-", rebuilt, status == infer_reproduced || infer_rank(status) > infer_rank(best.Status))
 		infer_trash(rebuilt)
 
 		if note != "" {
@@ -413,16 +494,28 @@ func infer_settle(j infer_job, src, ref, base filename, published map[string]fil
 		}
 
 		if status == infer_reproduced {
-			return infer_params_map(j.Routine, c.params),
+			return routine_params_map(j.Routine, c.params),
 				infer_check{Status: status, Outputs: outputs, Candidates: tried, Note: note, At: infer_now()}
 		}
 
 		if infer_rank(status) > infer_rank(best.Status) {
 			best = infer_check{Status: status, Outputs: outputs, Note: note, At: infer_now()}
-			params = infer_params_map(j.Routine, c.params)
+			params = routine_params_map(j.Routine, c.params)
 		}
 
 		best.Candidates = tried
+	}
+
+	if j.Routine == "crop-raster" && infer_rank(best.Status) < infer_rank(infer_matched) && published["raster"] != "" {
+		linked := infer_link(src)
+		config, check := infer_crop_on_grid(maybe_zip(linked), ref, published["raster"], j.Config, j.Resolution)
+		infer_unlink([]filename{src}, []filename{linked})
+		check.Candidates = len(candidates)
+
+		if infer_rank(check.Status) >= infer_rank(best.Status) {
+			p := routine_params{Resolution: j.Resolution, Config: config}
+			return routine_params_map(j.Routine, p), check
+		}
 	}
 
 	if best.Status == "" {
@@ -441,8 +534,10 @@ func infer_settle(j infer_job, src, ref, base filename, published map[string]fil
 func infer_rank(status string) int {
 	switch status {
 	case infer_reproduced:
-		return 3
+		return 4
 	case infer_equivalent:
+		return 3
+	case infer_matched:
 		return 2
 	case infer_differs:
 		return 1
@@ -497,6 +592,31 @@ func infer_fetch(url string) (filename, error) {
 	return download(url)
 }
 
+// infer_kept hard-links files into -keep's directory for the dataset, as
+// <prefix><name>; replace says whether they supersede what is kept there.
+func infer_kept(dataset, prefix string, files map[string]filename, replace bool) {
+	if infer_keep == "" {
+		return
+	}
+
+	dir := filepath.Join(infer_keep, dataset)
+	os.MkdirAll(dir, 0755)
+
+	for name, f := range files {
+		if f == "" {
+			continue
+		}
+
+		to := filepath.Join(dir, prefix+name)
+		if _, err := os.Stat(to); err == nil && !replace {
+			continue
+		}
+
+		os.Remove(to)
+		os.Link(f, to)
+	}
+}
+
 func infer_trash(files map[string]filename) {
 	for _, f := range files {
 		if f != "" {
@@ -515,9 +635,12 @@ func infer_run(routine_name string, p routine_params) (map[string]filename, erro
 	}
 
 	p.S3 = s3config{}
+
+	inputs := []filename{p.Dataset, p.Reference, p.Base}
 	p.Dataset = infer_link(p.Dataset)
 	p.Reference = infer_link(p.Reference)
 	p.Base = infer_link(p.Base)
+	defer infer_unlink(inputs, []filename{p.Dataset, p.Reference, p.Base})
 
 	jsonstr, err := fn(noop_reporter, p)
 	if err != nil {
@@ -538,6 +661,21 @@ func infer_link(f filename) filename {
 	}
 
 	return out
+}
+
+// infer_unlink removes the links infer_link made, under whatever name a
+// routine renamed them to (maybe_zip and maybe_shp add a suffix).
+func infer_unlink(inputs, links []filename) {
+	for i, l := range links {
+		if l == "" || l == inputs[i] {
+			continue
+		}
+
+		named, _ := filepath.Glob(l + "*")
+		for _, f := range named {
+			os.Remove(f)
+		}
+	}
 }
 
 // infer_outputs finds the files a routine's reply names: paver writes them
@@ -649,7 +787,11 @@ func infer_compare_rasters(published, rebuilt filename) (string, string) {
 		return infer_reproduced, ""
 	}
 
-	if e := rasters_equivalent(published, rebuilt); e == nil {
+	edges, e := rasters_equivalent(published, rebuilt)
+	if e == nil && edges > 0 {
+		return infer_equivalent, fmt.Sprintf("raster: values within 1e-6, coordinate within 1e-9, but %d cells at the outline's edge in one and out of the other", edges)
+	}
+	if e == nil {
 		return infer_equivalent, "raster: values within 1e-6, coordinate within 1e-9"
 	}
 
@@ -657,66 +799,85 @@ func infer_compare_rasters(published, rebuilt filename) (string, string) {
 		return infer_differs, note
 	}
 
-	return infer_differs, "raster: " + err.Error()
+	return infer_differs, "raster: " + e.Error()
 }
 
+// Which cells along the outline's edge fall inside it is GDAL's call, and it
+// has changed: cells may hold data in one raster and nodata in the other, in
+// patches that reach within raster_edge_reach cells of where the published one
+// turns from data to nodata -- raster_edge_share of a band at most.
+const (
+	raster_edge_reach = 2
+	raster_edge_share = 1e-4
+)
+
 // rasters_equivalent accepts what a different GDAL build may change: the last
-// bits of a geotransform, how it spells a projection, and float noise in a
-// sample. Every sample within infer_epsilon of the published one counts.
-func rasters_equivalent(a, b filename) error {
+// bits of a geotransform, how it spells a projection, float noise in a sample,
+// and cells along the outline's edge, which it counts. Every other sample
+// within infer_epsilon of the published one counts.
+func rasters_equivalent(a, b filename) (int, error) {
 	da, err := gdal.Open(a, gdal.ReadOnly)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer da.Close()
 
 	db, err := gdal.Open(b, gdal.ReadOnly)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer db.Close()
 
 	if da.RasterXSize() != db.RasterXSize() || da.RasterYSize() != db.RasterYSize() {
-		return fmt.Errorf("size %dx%d vs %dx%d", da.RasterXSize(), da.RasterYSize(), db.RasterXSize(), db.RasterYSize())
+		return 0, fmt.Errorf("size %dx%d vs %dx%d", da.RasterXSize(), da.RasterYSize(), db.RasterXSize(), db.RasterYSize())
 	}
 
 	if da.RasterCount() != db.RasterCount() {
-		return fmt.Errorf("band count %d vs %d", da.RasterCount(), db.RasterCount())
+		return 0, fmt.Errorf("band count %d vs %d", da.RasterCount(), db.RasterCount())
 	}
 
 	if !geotransforms_equal(da.GeoTransform(), db.GeoTransform()) {
-		return errors.New("geotransform differs")
+		return 0, errors.New("geotransform differs")
 	}
 
 	if !projections_equal(da.Projection(), db.Projection()) {
-		return errors.New("projection differs")
+		return 0, errors.New("projection differs")
 	}
 
 	width, height := da.RasterXSize(), da.RasterYSize()
+	edges := 0
 
 	for i := 1; i <= da.RasterCount(); i++ {
 		ba, bb := da.RasterBand(i), db.RasterBand(i)
 
 		if ba.RasterDataType() != bb.RasterDataType() {
-			return fmt.Errorf("band %d: type %v vs %v", i, ba.RasterDataType(), bb.RasterDataType())
+			return 0, fmt.Errorf("band %d: type %v vs %v", i, ba.RasterDataType(), bb.RasterDataType())
 		}
 
 		na, oka := ba.NoDataValue()
 		nb, okb := bb.NoDataValue()
 		if oka != okb || (oka && math.Float64bits(na) != math.Float64bits(nb)) {
-			return fmt.Errorf("band %d: nodata %v/%v vs %v/%v", i, na, oka, nb, okb)
+			return 0, fmt.Errorf("band %d: nodata %v/%v vs %v/%v", i, na, oka, nb, okb)
 		}
 
-		if err := band_samples_equivalent(ba, bb, width, height); err != nil {
-			return fmt.Errorf("band %d: %w", i, err)
+		n, err := band_samples_equivalent(ba, bb, na, oka, width, height)
+		if err != nil {
+			return 0, fmt.Errorf("band %d: %w", i, err)
 		}
+		edges += n
 	}
 
-	return nil
+	return edges, nil
 }
 
-func band_samples_equivalent(a, b gdal.RasterBand, width, height int) error {
+func band_samples_equivalent(a, b gdal.RasterBand, nodata float64, hasnodata bool, width, height int) (int, error) {
 	const rows = 256
+
+	empty := func(v float64) bool { return hasnodata && (v == nodata || (math.IsNaN(v) && math.IsNaN(nodata))) }
+
+	// Cells that hold data in one band only, by their offset in the band.
+	sided := []int{}
+	most := int(raster_edge_share * float64(width*height))
 
 	for y := 0; y < height; y += rows {
 		n := min(rows, height-y)
@@ -725,20 +886,119 @@ func band_samples_equivalent(a, b gdal.RasterBand, width, height int) error {
 		vb := make([]float64, width*n)
 
 		if err := a.IO(gdal.Read, 0, y, width, n, va, width, n, 0, 0); err != nil {
-			return err
+			return 0, err
 		}
 		if err := b.IO(gdal.Read, 0, y, width, n, vb, width, n, 0, 0); err != nil {
-			return err
+			return 0, err
 		}
 
 		for k := range va {
-			if !floats_close(va[k], vb[k]) {
-				return fmt.Errorf("samples differ in rows %d..%d", y, y+n-1)
+			if floats_close(va[k], vb[k]) {
+				continue
+			}
+
+			if empty(va[k]) == empty(vb[k]) {
+				return 0, fmt.Errorf("samples differ in rows %d..%d", y, y+n-1)
+			}
+
+			if sided = append(sided, y*width+k); len(sided) > most {
+				return 0, fmt.Errorf("more than %d cells hold data in one raster only", most)
 			}
 		}
 	}
 
-	return nil
+	for _, patch := range cell_patches(sided, width) {
+		at_edge := false
+		for _, at := range patch {
+			if cell_at_edge(a, empty, at%width, at/width, width, height) {
+				at_edge = true
+				break
+			}
+		}
+
+		if !at_edge {
+			return 0, fmt.Errorf("cell %d,%d holds data in one raster only, away from the outline's edge", patch[0]%width, patch[0]/width)
+		}
+	}
+
+	return len(sided), nil
+}
+
+// cell_patches groups cells, by offset, into those that touch, diagonals
+// included.
+func cell_patches(cells []int, width int) [][]int {
+	in := map[int]bool{}
+	for _, c := range cells {
+		in[c] = true
+	}
+
+	seen := map[int]bool{}
+	patches := [][]int{}
+
+	for _, c := range cells {
+		if seen[c] {
+			continue
+		}
+
+		patch := []int{}
+		todo := []int{c}
+		seen[c] = true
+
+		for len(todo) > 0 {
+			at := todo[len(todo)-1]
+			todo = todo[:len(todo)-1]
+			patch = append(patch, at)
+
+			x, y := at%width, at/width
+			for dy := -1; dy <= 1; dy++ {
+				for dx := -1; dx <= 1; dx++ {
+					nx, ny := x+dx, y+dy
+					if nx < 0 || nx >= width || ny < 0 {
+						continue
+					}
+					n := ny*width + nx
+					if in[n] && !seen[n] {
+						seen[n] = true
+						todo = append(todo, n)
+					}
+				}
+			}
+		}
+
+		patches = append(patches, patch)
+	}
+
+	return patches
+}
+
+// cell_at_edge says the band turns from data to nodata within
+// raster_edge_reach cells of x,y, or the raster ends there.
+func cell_at_edge(band gdal.RasterBand, empty func(float64) bool, x, y, width, height int) bool {
+	r := raster_edge_reach
+
+	x0, y0 := max(0, x-r), max(0, y-r)
+	x1, y1 := min(width-1, x+r), min(height-1, y+r)
+
+	if x1-x0 < 2*r || y1-y0 < 2*r {
+		return true
+	}
+
+	w, h := x1-x0+1, y1-y0+1
+	v := make([]float64, w*h)
+	if band.IO(gdal.Read, x0, y0, w, h, v, w, h, 0, 0) != nil {
+		return false
+	}
+
+	data, nodata := false, false
+	for _, s := range v {
+		if empty(s) {
+			nodata = true
+		} else {
+			data = true
+		}
+	}
+
+	return data && nodata
 }
 
 func floats_close(a, b float64) bool {
@@ -771,7 +1031,7 @@ func rasters_grid_note(published, rebuilt filename) string {
 	}
 
 	pgt, rgt := p.GeoTransform(), r.GeoTransform()
-	if pgt == rgt {
+	if geotransforms_equal(pgt, rgt) {
 		return ""
 	}
 
@@ -854,7 +1114,9 @@ func (s *feature_stream) next() (json.RawMessage, error) {
 func (s *feature_stream) close() { s.file.Close() }
 
 // feature_canonical is what a feature is, independent of key order: its
-// properties at full precision, and its geometry (plus id) at decimals.
+// properties at full precision, and its geometry (plus id) at decimals --
+// where what another GDAL's clip may order differently is taken in any order:
+// a multi-geometry's parts, a ring's starting vertex, a polygon's holes.
 func feature_canonical(raw json.RawMessage, decimals int) (string, error) {
 	var f struct {
 		ID         json.RawMessage `json:"id"`
@@ -873,7 +1135,7 @@ func feature_canonical(raw json.RawMessage, decimals int) (string, error) {
 		return "", err
 	}
 
-	geom, err := canonical_json(f.Geometry, decimals)
+	geom, err := canonical_geometry(f.Geometry, decimals)
 	if err != nil {
 		return "", err
 	}
@@ -894,6 +1156,93 @@ func feature_canonical(raw json.RawMessage, decimals int) (string, error) {
 
 // canonical_json writes v with object keys sorted and numbers in their
 // shortest exact form, rounded to decimals when it is not negative.
+func canonical_geometry(raw json.RawMessage, decimals int) (string, error) {
+	if decimals < 0 {
+		return canonical_json(raw, decimals)
+	}
+
+	var g struct {
+		Type        string            `json:"type"`
+		Coordinates []json.RawMessage `json:"coordinates"`
+	}
+	if json.Unmarshal(raw, &g) != nil {
+		return canonical_json(raw, decimals)
+	}
+
+	switch g.Type {
+	case "Polygon":
+		return canonical_polygon(g.Coordinates, decimals)
+
+	case "MultiPoint", "MultiLineString", "MultiPolygon":
+		parts := make([]string, len(g.Coordinates))
+		for i, c := range g.Coordinates {
+			var part string
+			var err error
+
+			if g.Type == "MultiPolygon" {
+				var rings []json.RawMessage
+				if err = json.Unmarshal(c, &rings); err == nil {
+					part, err = canonical_polygon(rings, decimals)
+				}
+			} else {
+				part, err = canonical_json(c, decimals)
+			}
+			if err != nil {
+				return "", err
+			}
+
+			parts[i] = part
+		}
+		sort.Strings(parts)
+
+		return g.Type + "[" + strings.Join(parts, ",") + "]", nil
+	}
+
+	return canonical_json(raw, decimals)
+}
+
+// canonical_polygon is a polygon whatever vertex its rings start at, and in
+// whatever order its holes come.
+func canonical_polygon(rings []json.RawMessage, decimals int) (string, error) {
+	out := make([]string, len(rings))
+
+	for i, r := range rings {
+		var positions []json.RawMessage
+		if err := json.Unmarshal(r, &positions); err != nil {
+			return "", err
+		}
+
+		vertices := make([]string, 0, len(positions))
+		for _, p := range positions {
+			v, err := canonical_json(p, decimals)
+			if err != nil {
+				return "", err
+			}
+			vertices = append(vertices, v)
+		}
+
+		if n := len(vertices); n > 1 && vertices[0] == vertices[n-1] {
+			vertices = vertices[:n-1]
+		}
+
+		first := 0
+		for k := range vertices {
+			if vertices[k] < vertices[first] {
+				first = k
+			}
+		}
+		vertices = append(vertices[first:], vertices[:first]...)
+
+		out[i] = "[" + strings.Join(vertices, ",") + "]"
+	}
+
+	if len(out) > 1 {
+		sort.Strings(out[1:])
+	}
+
+	return "Polygon[" + strings.Join(out, ",") + "]", nil
+}
+
 func canonical_json(raw json.RawMessage, decimals int) (string, error) {
 	if len(raw) == 0 {
 		return "null", nil
@@ -1297,7 +1646,7 @@ func infer_candidates(j infer_job, src, ref, base filename, published map[string
 			return nil, errors.New("crop-raster needs the outline vectors, the outline raster and the category's raster->paver config")
 		}
 
-		return []infer_candidate{{params: common, describe: "the category's config and the geography's resolution"}}, nil
+		return infer_crop_candidates(common, published["raster"]), nil
 
 	case "clip-proximity":
 		return infer_clip_proximity_candidates(j, common, published)
@@ -1318,9 +1667,10 @@ func infer_candidates(j infer_job, src, ref, base filename, published map[string
 	return nil, errors.New("no candidates for " + j.Routine)
 }
 
-// infer_params_map renders a candidate as the column's params: paver's own
-// JSON names, without the endpoints, which come from the dataset itself.
-func infer_params_map(routine_name string, p routine_params) map[string]any {
+// routine_params_map renders the parameters a routine reads as the column's
+// params: paver's own JSON names, without the endpoints, which come from the
+// dataset itself.
+func routine_params_map(routine_name string, p routine_params) map[string]any {
 	m := map[string]any{"resolution": p.Resolution}
 
 	switch routine_name {
@@ -1360,6 +1710,67 @@ func infer_params_apply(p routine_params, m map[string]any) (routine_params, err
 	return p, nil
 }
 
+// infer_crop_candidates runs the category's config and the geography's
+// resolution through each crop paver has had, the one whose layout the
+// published raster has first: a band per source band, of the config's type, was
+// the 2021 crop's (the later ones write Float32), cells that are not square the
+// 2026-09 one's.
+//
+// The category's config may have changed since: the published raster's own
+// nodata, and its type where the crop kept the config's, are tried next.
+func infer_crop_candidates(p routine_params, published filename) []infer_candidate {
+	type crop struct{ routine, describe string }
+
+	current := crop{"", ""}
+	of2026 := crop{crop_raster_2026, ", by paver's crop of 2026-09"}
+	of2021 := crop{crop_raster_2021, ", by paver's crop of 2021"}
+
+	crops := []crop{current, of2026, of2021}
+	configs := []raster_config{p.Config}
+	describes := []string{"the category's config and the geography's resolution"}
+
+	if ds, err := gdal.Open(published, gdal.ReadOnly); err == nil {
+		gt := ds.GeoTransform()
+		square := math.Abs(math.Abs(gt[1])-math.Abs(gt[5])) <= 1e-9*math.Abs(gt[1])
+
+		band := ds.RasterBand(1)
+		as2021 := ds.RasterCount() == 1 || band.RasterDataType().Name() != "Float32"
+
+		switch {
+		case as2021:
+			crops = []crop{of2021, of2026, current}
+		case !square:
+			crops = []crop{of2026, of2021, current}
+		}
+
+		read := p.Config
+		if nodata, ok := band.NoDataValue(); ok && nodata == math.Trunc(nodata) {
+			read.Nodata = int(nodata)
+		}
+		if as2021 {
+			read.Numbertype = band.RasterDataType().Name()
+		}
+
+		if read != p.Config {
+			configs = append(configs, read)
+			describes = append(describes, fmt.Sprintf("the category's resampling with the published nodata %d and type %s, and the geography's resolution", read.Nodata, read.Numbertype))
+		}
+
+		ds.Close()
+	}
+
+	candidates := []infer_candidate{}
+	for _, c := range crops {
+		for i, config := range configs {
+			q := p
+			q.Config = config
+			candidates = append(candidates, infer_candidate{params: q, describe: describes[i] + c.describe, routine: c.routine})
+		}
+	}
+
+	return candidates
+}
+
 func infer_clip_proximity_candidates(j infer_job, p routine_params, published map[string]filename) ([]infer_candidate, error) {
 	fields, err := geojson_properties(published["vectors"])
 	if err != nil {
@@ -1372,8 +1783,10 @@ func infer_clip_proximity_candidates(j infer_job, p routine_params, published ma
 	if j.Simplify != nil {
 		simplifies = append(simplifies, *j.Simplify)
 	}
-	if !contains_float32(simplifies, 0) {
-		simplifies = append(simplifies, 0)
+	for _, s := range []float32{0, legacy_simplify} {
+		if !contains_float32(simplifies, s) {
+			simplifies = append(simplifies, s)
+		}
 	}
 
 	dissolves := []bool{false}
@@ -1389,6 +1802,10 @@ func infer_clip_proximity_candidates(j infer_job, p routine_params, published ma
 			candidates = append(candidates, infer_candidate{params: c, describe: fmt.Sprintf("simplify %g, dissolve %t", s, d)})
 		}
 	}
+
+	// Paver's clip before 2022-09 kept only the selected fields.
+	candidates = append(candidates, infer_candidate{params: p, routine: clip_proximity_2021,
+		describe: "the published fields, by paver's clip of 2021"})
 
 	// A file paved before the dialog took the category's simplification may
 	// carry one as coarse as the geography's grid.
@@ -1545,8 +1962,24 @@ func geojson_properties(f filename) ([]string, error) {
 
 // geojson_unique_numbers is the published vectors' numeric properties that
 // hold a different value in every feature: what admin-boundaries can rasterise
-// into ids. Only the first features are read: a candidate only has to be
-// plausible, running it is what decides.
+// into ids. A string of digits counts, as GDAL burns it as its number. Only the
+// first features are read: a candidate only has to be plausible, running it is
+// what decides.
+func json_number_like(v json.RawMessage) bool {
+	var number float64
+	if json.Unmarshal(v, &number) == nil {
+		return true
+	}
+
+	var text string
+	if json.Unmarshal(v, &text) != nil {
+		return false
+	}
+
+	_, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	return err == nil
+}
+
 func geojson_unique_numbers(f filename) ([]string, error) {
 	if f == "" {
 		return nil, nil
@@ -1590,8 +2023,7 @@ func geojson_unique_numbers(f filename) ([]string, error) {
 				numeric[k] = true
 			}
 
-			var number float64
-			if json.Unmarshal(v, &number) != nil {
+			if !json_number_like(v) {
 				numeric[k] = false
 			}
 
@@ -2253,13 +2685,13 @@ func infer_summary(entries map[string]infer_entry) {
 
 	for _, r := range routines {
 		c := by[r]
-		fmt.Printf("%s: reproduced %d, equivalent %d, differs %d, failed %d, unchecked %d\n",
-			r, c[infer_reproduced], c[infer_equivalent], c[infer_differs], c[infer_failed], c[infer_unchecked])
+		fmt.Printf("%s: reproduced %d, equivalent %d, matched %d, differs %d, failed %d (recoverable), unusable %d, unchecked %d\n",
+			r, c[infer_reproduced], c[infer_equivalent], c[infer_matched], c[infer_differs], c[infer_failed], c[infer_unusable], c[infer_unchecked])
 	}
 
 	unsure := []infer_entry{}
 	for _, e := range entries {
-		if e.Check.Status == infer_differs || e.Check.Status == infer_failed {
+		if e.Check.Status == infer_differs || e.Check.Status == infer_failed || e.Check.Status == infer_unusable {
 			unsure = append(unsure, e)
 		}
 	}

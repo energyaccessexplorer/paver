@@ -7,8 +7,12 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -192,8 +196,16 @@ func TestInferClipProximityCandidates(t *testing.T) {
 		}
 	}
 
+	legacy := false
+	for _, c := range candidates[len(want):] {
+		legacy = legacy || c.params.Simplify == legacy_simplify
+	}
+	if !legacy {
+		t.Fatal("paver's own simplification of the reference was not tried")
+	}
+
 	last := candidates[len(candidates)-1]
-	if last.params.Simplify == 0 || last.params.Simplify == 0.0005 {
+	if last.params.Simplify == 0 || last.params.Simplify == 0.0005 || last.params.Simplify == legacy_simplify {
 		t.Fatalf("the grid-sized fallback was not tried: %g", last.params.Simplify)
 	}
 
@@ -221,7 +233,7 @@ func TestInferClipProximityNeverDissolvesPoints(t *testing.T) {
 }
 
 func TestInferParamsAreTheRoutinesOwnNames(t *testing.T) {
-	got := infer_params_map("crop-raster", routine_params{
+	got := routine_params_map("crop-raster", routine_params{
 		Dataset:    "/tmp/source",
 		Reference:  "/tmp/outline",
 		Base:       "/tmp/base",
@@ -234,7 +246,7 @@ func TestInferParamsAreTheRoutinesOwnNames(t *testing.T) {
 		t.Fatalf("crop-raster params %s", b)
 	}
 
-	got = infer_params_map("clip-proximity", routine_params{
+	got = routine_params_map("clip-proximity", routine_params{
 		Dataset:  "/tmp/source",
 		Fields:   []string{"a", "b"},
 		Dissolve: true,
@@ -248,7 +260,7 @@ func TestInferParamsAreTheRoutinesOwnNames(t *testing.T) {
 }
 
 func TestInferSettledRetriesWhatCouldNotRun(t *testing.T) {
-	settled := []string{infer_reproduced, infer_equivalent, infer_differs}
+	settled := []string{infer_reproduced, infer_equivalent}
 
 	for _, status := range settled {
 		if !infer_settled(infer_entry{Key: "k", Check: infer_check{Status: status}}, "k") {
@@ -256,7 +268,7 @@ func TestInferSettledRetriesWhatCouldNotRun(t *testing.T) {
 		}
 	}
 
-	for _, status := range []string{infer_failed, infer_unchecked, ""} {
+	for _, status := range []string{infer_differs, infer_failed, infer_unchecked, ""} {
 		if infer_settled(infer_entry{Key: "k", Check: infer_check{Status: status}}, "k") {
 			t.Fatalf("%s with its key is settled", status)
 		}
@@ -321,6 +333,39 @@ func TestInferReadJobsRefusesWhatItCannotRun(t *testing.T) {
 
 // The routines publish once with known parameters; infer has to arrive at the
 // same ones from the files alone.
+func TestInferReproducesAClipThatKeptNoFields(t *testing.T) {
+	test_tmpdir(t)
+
+	source := write_geojson(t, filepath.Join(tmpdir, "source.geojson"),
+		`{"type":"Feature","properties":{"name":"a","value":1},"geometry":{"type":"LineString","coordinates":[[29.5,-1.2],[29.9,-1.4]]}}`,
+		`{"type":"Feature","properties":{"name":"b","value":2},"geometry":{"type":"LineString","coordinates":[[29.6,-1.1],[30.0,-1.3]]}}`)
+
+	reference := write_geojson(t, filepath.Join(tmpdir, "reference.geojson"),
+		`{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[29.0,-2.0],[30.5,-2.0],[30.5,-0.5],[29.0,-0.5],[29.0,-2.0]]]}}`)
+
+	j := infer_job{Routine: "clip-proximity", Type: "lines", Resolution: 1000, DatasetURL: source, Reference: reference}
+
+	published, err := infer_run(clip_proximity_2021, routine_params{
+		Dataset:    source,
+		Reference:  reference,
+		Resolution: 1000,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params, check := infer_settle(j, source, reference, "", published)
+
+	if check.Status != infer_reproduced || !strings.Contains(check.Note, "2021") {
+		t.Fatalf("%s: %s", check.Status, check.Note)
+	}
+
+	b, _ := json.Marshal(params)
+	if string(b) != `{"dissolve":false,"fields":[],"resolution":1000,"simplify":0}` {
+		t.Fatalf("params %s", b)
+	}
+}
+
 func TestInferReproducesClipProximity(t *testing.T) {
 	test_tmpdir(t)
 
@@ -420,6 +465,23 @@ func TestInferReproducesCsvRaster(t *testing.T) {
 	}
 }
 
+func TestInferFindsIdsWrittenAsDigits(t *testing.T) {
+	test_tmpdir(t)
+
+	vectors := write_geojson(t, filepath.Join(tmpdir, "published.geojson"),
+		point_feature(`{"name":"a","code":"RW1","pcode":"1101"}`, `[1,2]`),
+		point_feature(`{"name":"b","code":"RW2","pcode":"1102"}`, `[3,4]`))
+
+	unique, err := geojson_unique_numbers(vectors)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(unique) != 1 || unique[0] != "pcode" {
+		t.Fatalf("unique numbers %v, want [pcode]", unique)
+	}
+}
+
 func TestInferReproducesAdminBoundaries(t *testing.T) {
 	test_tmpdir(t)
 
@@ -448,6 +510,34 @@ func TestInferReproducesAdminBoundaries(t *testing.T) {
 	b, _ := json.Marshal(params)
 	if string(b) != `{"attr":"gid","resolution":1000}` {
 		t.Fatalf("params %s", b)
+	}
+}
+
+func TestInferReproducesARasterAnEarlierCropMade(t *testing.T) {
+	test_tmpdir(t)
+
+	job, _ := crop_fixture(t)
+	p := job.routine_params
+
+	for _, crop := range []string{crop_raster_2021, crop_raster_2026} {
+		published, err := infer_run(crop, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		inferred := infer_job{Routine: "crop-raster", Resolution: p.Resolution, Config: p.Config}
+
+		_, check := infer_settle(inferred, p.Dataset, p.Reference, p.Base, published)
+
+		if check.Status != infer_reproduced || check.Candidates != 1 {
+			t.Fatalf("%s: %s after %d candidates, %s", crop, check.Status, check.Candidates, check.Note)
+		}
+
+		if !strings.Contains(check.Note, crop[len("crop-raster@"):]) {
+			t.Fatalf("%s: settled as %q", crop, check.Note)
+		}
+
+		infer_trash(published)
 	}
 }
 
@@ -499,5 +589,312 @@ func TestInferSettlesOnTheClosestCandidate(t *testing.T) {
 
 	if check.Status != infer_failed {
 		t.Fatalf("%s: %s", check.Status, check.Note)
+	}
+}
+
+func TestInferMatchesACropOnItsOwnGrid(t *testing.T) {
+	test_tmpdir(t)
+
+	crop_fixture(t)
+	source, outline, base := filepath.Join(tmpdir, "source.tif"), filepath.Join(tmpdir, "outline.geojson"), filepath.Join(tmpdir, "base.tif")
+
+	category := raster_config{Numbertype: "Float32", Nodata: -32767, Resample: "bilinear"}
+
+	made := map[string]func(raster_config) (filename, error){
+		"2021": func(rc raster_config) (filename, error) { return raster_crop_2021(source, base, outline, rc, 1000) },
+		"2026": func(rc raster_config) (filename, error) { return raster_crop_2026(source, base, outline, rc) },
+		// The EAE-500 re-pave: band one as the 2021 crop made it, beside the 2026 sums.
+		"re-pave": func(rc raster_config) (filename, error) {
+			sums, err := raster_crop_2026(source, base, outline, rc)
+			if err != nil {
+				return "", err
+			}
+
+			g, err := read_published_grid(sums)
+			if err != nil {
+				return "", err
+			}
+
+			first, err := warp_on_grid_2021(source, outline, g, rc.Resample, raster_config{Numbertype: "Float32", Nodata: rc.Nodata}, 1000)
+			if err != nil {
+				return "", err
+			}
+
+			return stack_bands(t, []filename{first, sums, sums}, []int{1, 2, 3}), nil
+		},
+	}
+
+	for name, crop := range made {
+		then := raster_config{Numbertype: "Int16", Nodata: -9999, Resample: "bilinear"}
+
+		published, err := crop(then)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		config, check := infer_crop_on_grid(source, outline, published, category, 1000)
+
+		if check.Status != infer_matched {
+			t.Fatalf("%s: %s: %s", name, check.Status, check.Note)
+		}
+
+		if config.Nodata != -9999 || config.Resample != "bilinear" {
+			t.Fatalf("%s: config %+v", name, config)
+		}
+
+		if name == "2021" && config.Numbertype != "Int16" {
+			t.Fatalf("%s: type %s, want the published Int16", name, config.Numbertype)
+		}
+
+		trash(published)
+	}
+}
+
+func TestInferDoesNotMatchACropWithDataTheOutlineHasNone(t *testing.T) {
+	test_tmpdir(t)
+
+	crop_fixture(t)
+	source, outline := filepath.Join(tmpdir, "source.tif"), filepath.Join(tmpdir, "outline.geojson")
+	base := filepath.Join(tmpdir, "base.tif")
+
+	config := raster_config{Numbertype: "Float32", Nodata: -9999, Resample: "near"}
+
+	published, err := raster_crop_2026(source, base, outline, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer trash(published)
+
+	// A block inside the country that production left without data, as a
+	// crop with other parameters would have.
+	ds, err := gdal.Open(published, gdal.Update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := make([]float32, 100)
+	for i := range block {
+		block[i] = -9999
+	}
+	for b := 1; b <= 3; b++ {
+		ds.RasterBand(b).IO(gdal.Write, 75, 85, 10, 10, block, 10, 10, 0, 0)
+	}
+	ds.Close()
+
+	_, check := infer_crop_on_grid(source, outline, published, config, 1000)
+
+	if check.Status == infer_matched {
+		t.Fatalf("matched: %s", check.Note)
+	}
+	if check.Profile == nil || check.Profile.Interior <= grid_interior_share || check.Profile.Edge != 0 {
+		t.Fatalf("profile %+v: %s", check.Profile, check.Note)
+	}
+}
+
+func TestVectorsCompareTakesPartsInAnyOrder(t *testing.T) {
+	test_tmpdir(t)
+
+	line := func(parts string) string {
+		return `{"type":"Feature","properties":{"a":1},"geometry":{"type":"MultiLineString","coordinates":` + parts + `}}`
+	}
+
+	published := write_geojson(t, filepath.Join(tmpdir, "published.geojson"), line(`[[[1,2],[3,4]],[[5,6],[7,8]]]`))
+	rebuilt := write_geojson(t, filepath.Join(tmpdir, "rebuilt.geojson"), line(`[[[5,6],[7,8]],[[1,2],[3,4]]]`))
+
+	if status, note := vectors_compare(published, rebuilt); status != infer_equivalent {
+		t.Fatalf("%s: %s", status, note)
+	}
+
+	reversed := write_geojson(t, filepath.Join(tmpdir, "reversed.geojson"), line(`[[[3,4],[1,2]],[[5,6],[7,8]]]`))
+
+	if status, _ := vectors_compare(published, reversed); status != infer_differs {
+		t.Fatalf("a reversed line is %s", status)
+	}
+}
+
+func TestInferLeavesNothingBehind(t *testing.T) {
+	test_tmpdir(t)
+
+	crop_fixture(t)
+	source, outline, base := filepath.Join(tmpdir, "source.tif"), filepath.Join(tmpdir, "outline.geojson"), filepath.Join(tmpdir, "base.tif")
+
+	category := raster_config{Numbertype: "Float32", Nodata: -32767, Resample: "near"}
+
+	published, err := raster_crop_2026(source, base, outline, raster_config{Numbertype: "Float32", Nodata: -9999, Resample: "near"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// One cell off, as another GDAL's crop would be: only the grid matches it.
+	ds, err := gdal.Open(published, gdal.Update)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cell := []float32{0}
+	band := ds.RasterBand(1)
+	band.IO(gdal.Read, 80, 90, 1, 1, cell, 1, 1, 0, 0)
+	cell[0] += 1000
+	band.IO(gdal.Write, 80, 90, 1, 1, cell, 1, 1, 0, 0)
+	ds.Close()
+
+	before, _ := os.ReadDir(tmpdir)
+
+	j := infer_job{Routine: "crop-raster", Resolution: 1000, Config: category}
+	if _, check := infer_settle(j, source, outline, base, map[string]filename{"raster": published}); check.Status != infer_matched {
+		t.Fatalf("%s: %s", check.Status, check.Note)
+	}
+
+	after, _ := os.ReadDir(tmpdir)
+	if len(after) != len(before) {
+		names := []string{}
+		for _, e := range after {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("%d files before, %d after: %v", len(before), len(after), names)
+	}
+}
+
+// stack_bands writes a GeoTIFF of band bands[i] of files[i], in order.
+func stack_bands(t *testing.T, files []filename, bands []int) filename {
+	t.Helper()
+
+	singles := []filename{}
+	for i, f := range files {
+		one := _filename() + ".tif"
+		if b, err := exec.Command("gdal_translate", "-q", "-b", strconv.Itoa(bands[i]), f, one).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, b)
+		}
+		singles = append(singles, one)
+	}
+
+	vrt := _filename() + ".vrt"
+	if b, err := exec.Command("gdalbuildvrt", append([]string{"-q", "-separate", vrt}, singles...)...).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, b)
+	}
+
+	out := _filename()
+	if b, err := exec.Command("gdal_translate", "-q", vrt, out).CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, b)
+	}
+
+	return out
+}
+
+func TestVectorsCompareTakesARingFromAnyVertex(t *testing.T) {
+	test_tmpdir(t)
+
+	polygon := func(rings string) string {
+		return `{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":` + rings + `}}`
+	}
+
+	published := write_geojson(t, filepath.Join(tmpdir, "published.geojson"),
+		polygon(`[[[0,0],[4,0],[4,4],[0,4],[0,0]],[[1,1],[1,2],[2,2],[1,1]],[[3,3],[3,3.5],[3.5,3.5],[3,3]]]`))
+	rebuilt := write_geojson(t, filepath.Join(tmpdir, "rebuilt.geojson"),
+		polygon(`[[[4,4],[0,4],[0,0],[4,0],[4,4]],[[3,3.5],[3.5,3.5],[3,3],[3,3.5]],[[1,2],[2,2],[1,1],[1,2]]]`))
+
+	if status, note := vectors_compare(published, rebuilt); status != infer_equivalent {
+		t.Fatalf("%s: %s", status, note)
+	}
+
+	holes_out := write_geojson(t, filepath.Join(tmpdir, "holes.geojson"),
+		polygon(`[[[1,1],[1,2],[2,2],[1,1]],[[0,0],[4,0],[4,4],[0,4],[0,0]],[[3,3],[3,3.5],[3.5,3.5],[3,3]]]`))
+
+	if status, _ := vectors_compare(published, holes_out); status != infer_differs {
+		t.Fatalf("a hole taken for the outer ring is %s", status)
+	}
+}
+
+func TestRastersEquivalentAllowCellsAtTheOutlinesEdge(t *testing.T) {
+	test_tmpdir(t)
+
+	// Data in the left half, nodata (-1) in the right; 0.01% of it is 4 cells.
+	outline := func(x, y int) float64 {
+		if x < 100 {
+			return float64(x + y)
+		}
+		return -1
+	}
+
+	published := filepath.Join(tmpdir, "published.tif")
+	write_mercator_int16(t, published, 200, 200, outline)
+
+	// Two cells side by side, two and three cells off the edge, as along DR
+	// Congo's border with Burundi.
+	edge := filepath.Join(tmpdir, "edge.tif")
+	write_mercator_int16(t, edge, 200, 200, func(x, y int) float64 {
+		if (x == 101 || x == 102) && y == 40 {
+			return 91
+		}
+		return outline(x, y)
+	})
+
+	if edges, err := rasters_equivalent(published, edge); err != nil || edges != 2 {
+		t.Fatalf("a patch off the edge: %d edges, %v", edges, err)
+	}
+
+	inland := filepath.Join(tmpdir, "inland.tif")
+	write_mercator_int16(t, inland, 200, 200, func(x, y int) float64 {
+		if x == 160 && y == 40 {
+			return 120
+		}
+		return outline(x, y)
+	})
+
+	if _, err := rasters_equivalent(published, inland); err == nil {
+		t.Fatal("a cell sixty cells off the edge was taken for the edge")
+	}
+}
+
+func write_mercator_int16(t *testing.T, path string, width, height int, value func(x, y int) float64) {
+	t.Helper()
+
+	drv, _ := gdal.GetDriverByName("GTiff")
+	ds := drv.Create(path, width, height, 1, gdal.Int16, nil)
+	defer ds.Close()
+
+	srs := gdal.CreateSpatialReference("")
+	srs.FromEPSG(3857)
+	wkt, _ := srs.ToWKT()
+	ds.SetProjection(wkt)
+	ds.SetGeoTransform([6]float64{3200000, 1000, 0, -100000, 0, -1000})
+
+	band := ds.RasterBand(1)
+	band.SetNoDataValue(-1)
+
+	row := make([]int16, width)
+	for y := 0; y < height; y++ {
+		for x := range row {
+			row[x] = int16(value(x, y))
+		}
+		band.IO(gdal.Write, 0, y, width, 1, row, width, 1, 0, 0)
+	}
+}
+
+func TestVectorsClipInChunksWhateverTheFeatureIds(t *testing.T) {
+	test_tmpdir(t)
+
+	if min(runtime.NumCPU(), 8) < 2 {
+		t.Skip("clips in chunks only with more than one CPU")
+	}
+
+	features := []string{}
+	for i := 0; i < 2500; i++ {
+		x, y := 29.5+float64(i%50)*0.01, -1.5+float64(i/50)*0.01
+		features = append(features, fmt.Sprintf(`{"type":"Feature","id":%d,"properties":{"n":%d},"geometry":{"type":"Point","coordinates":[%g,%g]}}`, i+11, i, x, y))
+	}
+	points := write_geojson(t, filepath.Join(tmpdir, "points.geojson"), features...)
+
+	outline := write_geojson(t, filepath.Join(tmpdir, "outline.geojson"),
+		`{"type":"Feature","properties":{},"geometry":{"type":"Polygon","coordinates":[[[29.0,-2.0],[30.5,-2.0],[30.5,-0.5],[29.0,-0.5],[29.0,-2.0]]]}}`)
+
+	clipped, err := vectors_clip(points, outline, noop_reporter)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ds := gdal.OpenDataSource(clipped, 0)
+	defer ds.Destroy()
+
+	if n, _ := ds.LayerByIndex(0).FeatureCount(true); n != 2500 {
+		t.Fatalf("%d features clipped, want 2500", n)
 	}
 }

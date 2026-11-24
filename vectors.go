@@ -260,14 +260,16 @@ func vectors_clip_chunk(in filename, container filename, c int, k int) (filename
 		ml.CreateField(def.FieldDefinition(j), true)
 	}
 
-	n, _ := src.FeatureCount(true)
-	for i := 0; i < n; i++ {
+	// By reading order: a GeoJSON feature's FID is its own id, which need not
+	// count from 0.
+	src.ResetReading()
+	for i, feat := 0, src.NextFeature(); feat != nil; i, feat = i+1, src.NextFeature() {
 		if i%k != c {
+			feat.Destroy()
 			continue
 		}
 
-		feat := src.Feature(int64(i))
-		if err := ml.Create(feat); err != nil {
+		if err := ml.Create(*feat); err != nil {
 			feat.Destroy()
 			return "", err
 		}
