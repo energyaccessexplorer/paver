@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,8 +14,10 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -202,6 +205,10 @@ func storageput(fname filename, key string, s3 s3config, cache string) bool {
 		return false
 	}
 
+	if st.Size() > tus_threshold {
+		return storageput_resumable(file, st.Size(), key, s3, cache)
+	}
+
 	u := fmt.Sprintf("%s/object/%s/%s", strings.TrimRight(s3.Storage, "/"), s3.Bucket, s3key(s3, key))
 
 	q, err := http.NewRequest("POST", u, file)
@@ -231,6 +238,155 @@ func storageput(fname filename, key string, s3 s3config, cache string) bool {
 	}
 
 	return true
+}
+
+// Storage's resumable uploads take chunks of exactly this size, the last
+// excepted.
+const tus_chunk = 6 << 20
+
+// Larger files are uploaded resumably. Smaller ones go in one POST, which is
+// the only upload that stores a Cache-Control as given: a resumable one keeps
+// just its max-age.
+const tus_threshold = 64 << 20
+
+const tus_attempts = 8
+
+// storageput_resumable uploads through Storage's TUS endpoint, a chunk per
+// request: a single POST of a large file outlasts the client's timeout, and
+// one over 5GB is refused at the CDN whatever the bucket allows.
+func storageput_resumable(file *os.File, size int64, key string, s3 s3config, cache string) bool {
+	endpoint := strings.TrimRight(s3.Storage, "/") + "/upload/resumable"
+
+	meta := []string{}
+	for _, kv := range [][2]string{
+		{"bucketName", s3.Bucket},
+		{"objectName", s3key(s3, key)},
+		{"contentType", key_type(key, file.Name())},
+		{"cacheControl", cache_max_age(cache)},
+	} {
+		meta = append(meta, kv[0]+" "+base64.StdEncoding.EncodeToString([]byte(kv[1])))
+	}
+
+	// Storage answers bursts with 429 and the odd 5xx; every request is retried.
+	retry := func(what string, try func() (bool, error)) bool {
+		for attempt := 1; ; attempt++ {
+			ok, err := try()
+			if ok {
+				return true
+			}
+			if attempt == tus_attempts {
+				logger.Println("resumable upload:", what, err)
+				return false
+			}
+			time.Sleep(time.Duration(attempt) * 2 * time.Second)
+		}
+	}
+
+	var location string
+	created := retry("create "+key, func() (bool, error) {
+		q, err := http.NewRequest("POST", endpoint, nil)
+		if err != nil {
+			return false, err
+		}
+		q.Header.Set("apikey", s3.ServiceKey)
+		q.Header.Set("Authorization", "Bearer "+s3.ServiceKey)
+		q.Header.Set("Tus-Resumable", "1.0.0")
+		q.Header.Set("Upload-Length", strconv.FormatInt(size, 10))
+		q.Header.Set("Upload-Metadata", strings.Join(meta, ","))
+		q.Header.Set("x-upsert", "true")
+
+		r, err := http_client.Do(q)
+		if err != nil {
+			return false, err
+		}
+		defer r.Body.Close()
+
+		if r.StatusCode != http.StatusCreated {
+			b, _ := io.ReadAll(r.Body)
+			return false, fmt.Errorf("%s %s", r.Status, b)
+		}
+
+		base, _ := url.Parse(endpoint)
+		loc, err := base.Parse(r.Header.Get("Location"))
+		if err != nil {
+			return false, err
+		}
+		location = loc.String()
+		return true, nil
+	})
+	if !created {
+		return false
+	}
+
+	// Where the server says the upload is: a chunk that failed may have landed.
+	offset_now := func() (int64, error) {
+		q, err := http.NewRequest("HEAD", location, nil)
+		if err != nil {
+			return 0, err
+		}
+		q.Header.Set("apikey", s3.ServiceKey)
+		q.Header.Set("Authorization", "Bearer "+s3.ServiceKey)
+		q.Header.Set("Tus-Resumable", "1.0.0")
+
+		r, err := http_client.Do(q)
+		if err != nil {
+			return 0, err
+		}
+		r.Body.Close()
+		return strconv.ParseInt(r.Header.Get("Upload-Offset"), 10, 64)
+	}
+
+	for offset := int64(0); offset < size; {
+		n := min(tus_chunk, size-offset)
+
+		sent := retry(fmt.Sprintf("%s at %d", key, offset), func() (bool, error) {
+			q, err := http.NewRequest("PATCH", location, io.NewSectionReader(file, offset, n))
+			if err != nil {
+				return false, err
+			}
+			q.ContentLength = n
+			q.Header.Set("apikey", s3.ServiceKey)
+			q.Header.Set("Authorization", "Bearer "+s3.ServiceKey)
+			q.Header.Set("Tus-Resumable", "1.0.0")
+			q.Header.Set("Upload-Offset", strconv.FormatInt(offset, 10))
+			q.Header.Set("Content-Type", "application/offset+octet-stream")
+
+			r, err := http_client.Do(q)
+			if err == nil {
+				defer r.Body.Close()
+				if r.StatusCode == http.StatusNoContent {
+					o, err := strconv.ParseInt(r.Header.Get("Upload-Offset"), 10, 64)
+					if err == nil {
+						offset = o
+					}
+					return err == nil, err
+				}
+				b, _ := io.ReadAll(r.Body)
+				err = fmt.Errorf("%s %s", r.Status, b)
+			}
+			if o, e := offset_now(); e == nil && o > offset {
+				offset = o
+				return true, nil
+			}
+			return false, err
+		})
+		if !sent {
+			return false
+		}
+	}
+
+	return true
+}
+
+// cache_max_age is a Cache-Control's max-age in seconds, the form Storage's
+// resumable uploads take it in.
+func cache_max_age(cache string) string {
+	for _, d := range strings.Split(cache, ",") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(d), "max-age="); ok {
+			return v
+		}
+	}
+	return "0"
 }
 
 // s3has says the bucket holds key with size bytes. A PUT is atomic, so an

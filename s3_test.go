@@ -535,3 +535,91 @@ func TestRepaveCopyRefusesAPageForAFile(t *testing.T) {
 		t.Errorf("a page that is the file: %+v", e)
 	}
 }
+
+// fake_tus is Storage's resumable endpoint: chunks of exactly tus_chunk but
+// the last, and a 429 for the chunk at refuse.
+type fake_tus struct {
+	mu      sync.Mutex
+	meta    string
+	length  int64
+	got     []byte
+	chunks  []int
+	refuse  int64
+	refused bool
+}
+
+func (f *fake_tus) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if r.Header.Get("Authorization") != "Bearer "+fake_service_key || r.Header.Get("Tus-Resumable") != "1.0.0" {
+		http.Error(w, "unauthorised", http.StatusUnauthorized)
+		return
+	}
+
+	switch {
+	case r.Method == "POST" && r.URL.Path == "/storage/v1/upload/resumable":
+		f.meta = r.Header.Get("Upload-Metadata")
+		f.length, _ = strconv.ParseInt(r.Header.Get("Upload-Length"), 10, 64)
+		w.Header().Set("Location", "/storage/v1/upload/resumable/abc")
+		w.WriteHeader(http.StatusCreated)
+
+	case r.Method == "HEAD":
+		w.Header().Set("Upload-Offset", strconv.Itoa(len(f.got)))
+		w.WriteHeader(http.StatusOK)
+
+	case r.Method == "PATCH":
+		offset, _ := strconv.ParseInt(r.Header.Get("Upload-Offset"), 10, 64)
+		body, _ := io.ReadAll(r.Body)
+
+		if offset == f.refuse && !f.refused {
+			f.refused = true
+			http.Error(w, "slow down", http.StatusTooManyRequests)
+			return
+		}
+		if offset != int64(len(f.got)) || (len(body) != tus_chunk && offset+int64(len(body)) != f.length) {
+			http.Error(w, "bad chunk", http.StatusConflict)
+			return
+		}
+
+		f.got = append(f.got, body...)
+		f.chunks = append(f.chunks, len(body))
+		w.Header().Set("Upload-Offset", strconv.Itoa(len(f.got)))
+		w.WriteHeader(http.StatusNoContent)
+
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func TestStoragePutResumesALargeFileInChunks(t *testing.T) {
+	tus := &fake_tus{refuse: tus_chunk}
+	srv := httptest.NewServer(tus)
+	t.Cleanup(srv.Close)
+
+	test_tmpdir(t)
+	file := filepath.Join(tmpdir, "large.tif")
+	data := make([]byte, tus_threshold+12345)
+	for i := range data {
+		data[i] = byte(i * 7)
+	}
+	os.WriteFile(file, data, 0644)
+
+	if !s3put_as(file, "root/geo/large.tif", storage_bucket(srv)) {
+		t.Fatal("upload failed")
+	}
+
+	if string(tus.got) != string(data) {
+		t.Fatalf("uploaded %d bytes, not the file's %d", len(tus.got), len(data))
+	}
+	if n := len(tus.chunks); n != (len(data)+tus_chunk-1)/tus_chunk || tus.chunks[n-1] != len(data)%tus_chunk {
+		t.Fatalf("chunks %v", tus.chunks)
+	}
+	if !tus.refused {
+		t.Fatal("the refused chunk was never sent")
+	}
+	// root/geo/large.tif, and the max-age of upload_cache_control
+	if !strings.Contains(tus.meta, "objectName cm9vdC9nZW8vbGFyZ2UudGlm") || !strings.Contains(tus.meta, "cacheControl MzE1MzYwMDA=") {
+		t.Fatalf("metadata %s", tus.meta)
+	}
+}
