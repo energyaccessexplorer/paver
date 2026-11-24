@@ -256,9 +256,10 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 	}
 
 	key := idempotency_key(q, p)
+	fn := routine_reply(q, rtn.fn)
 
 	if r.URL.Query().Has("async") {
-		j, started := job_get_or_start(key, q, sw(sid), p, rtn.fn)
+		j, started := job_get_or_start(key, q, sw(sid), p, fn)
 
 		// The job's starter closes the progress socket when the job ends;
 		// async requests return immediately and cannot own that lifecycle.
@@ -281,10 +282,39 @@ func _routines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jsonstr, err := run_deduped(key, q, sw(sid), p, rtn.fn)
+	jsonstr, err := run_deduped(key, q, sw(sid), p, fn)
 	routine_respond(w, jsonstr, err)
 
 	defer socket_destroy(sid, socket_get(sid), websocket.StatusNormalClosure, "routine finished")
+}
+
+// routine_reply adds to a routine's reply what made its outputs, for admin to
+// record beside them: the routine, the parameters it read and paver's commit.
+func routine_reply(name string, fn routine) routine {
+	return func(w reporter, p routine_params) (string, error) {
+		jsonstr, err := fn(w, p)
+		if err != nil {
+			return jsonstr, err
+		}
+
+		var reply map[string]any
+		if json.Unmarshal([]byte(jsonstr), &reply) != nil {
+			return jsonstr, nil
+		}
+
+		reply["paver"] = map[string]any{
+			"routine": name,
+			"params":  routine_params_map(name, p),
+			"version": COMMIT_SHA,
+		}
+
+		j, err := json.Marshal(reply)
+		if err != nil {
+			return jsonstr, nil
+		}
+
+		return string(j), nil
+	}
 }
 
 func routine_respond(w http.ResponseWriter, jsonstr string, err error) {
