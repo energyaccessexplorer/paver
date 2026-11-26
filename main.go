@@ -101,6 +101,9 @@ func _uuid(s string) string {
 
 func trash(files ...filename) {
 	for _, f := range files {
+		if f == "" {
+			continue
+		}
 		if err := os.Remove(f); err != nil {
 			logger.Println(err.Error())
 		}
