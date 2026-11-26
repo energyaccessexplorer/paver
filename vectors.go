@@ -260,16 +260,15 @@ func vectors_clip_chunk(in filename, container filename, c int, k int) (filename
 		ml.CreateField(def.FieldDefinition(j), true)
 	}
 
-	n, _ := src.FeatureCount(true)
-	for i := 0; i < n; i++ {
-		if i%k != c {
-			continue
-		}
-
-		feat := src.Feature(int64(i))
-		if err := ml.Create(feat); err != nil {
-			feat.Destroy()
-			return "", err
+	// Chunks are dealt by reading order, not FID: FIDs need not start at 0
+	// nor be contiguous (GeoJSON takes them from each feature's "id").
+	src.ResetReading()
+	for i, feat := 0, src.NextFeature(); feat != nil; i, feat = i+1, src.NextFeature() {
+		if i%k == c {
+			if err := ml.Create(*feat); err != nil {
+				feat.Destroy()
+				return "", err
+			}
 		}
 		feat.Destroy()
 	}
@@ -338,23 +337,25 @@ func vectors_features_split(in filename, id string, w reporter) (map[int64]strin
 
 	results := make(map[int64]string)
 
-	for i := 0; i < vectors_feature_count(in); i++ {
-		f := src.Feature(int64(i))
+	src.ResetReading()
+	for f := src.NextFeature(); f != nil; f = src.NextFeature() {
 		x := f.FieldIndex(id)
-		y := f.FieldAsInteger64(x)
-
 		if x < 0 {
+			f.Destroy()
 			w("YEAH, NAH...")
 			return nil, errors.New("-1")
 		}
+
+		y := f.FieldAsInteger64(x)
 
 		out := _filename()
 		ds, _ := drv.Create(out, []string{})
 
 		layer := ds.CreateLayer("Layer0", s, src.Type(), []string{})
-		layer.Create(f)
+		layer.Create(*f)
 
 		ds.Destroy()
+		f.Destroy()
 
 		results[y] = out
 
@@ -376,9 +377,8 @@ func vectors_features_extra_attrs(in filename, w reporter) (map[int64]string, er
 	t := gdal.CreateSpatialReference("")
 	t.FromEPSG(3857)
 
-	for i := 0; i < vectors_feature_count(in); i++ {
-		f := src.Feature(int64(i))
-
+	src.ResetReading()
+	for f := src.NextFeature(); f != nil; f = src.NextFeature() {
 		g := f.Geometry()
 		g.TransformTo(t)
 
@@ -393,6 +393,8 @@ func vectors_features_extra_attrs(in filename, w reporter) (map[int64]string, er
 		case gdal.GT_MultiLineString:
 			println("LENGTH: ", int(g.Length()))
 		}
+
+		f.Destroy()
 	}
 
 	return results, nil
