@@ -8,7 +8,9 @@ on:
 
 jobs:
   build-deploy:
-    runs-on: ubuntu-latest
+    # The servers run Ubuntu 24.04: a binary linked against a newer image's
+    # GDAL (26.04 ships libgdal38, 24.04 libgdal34) cannot start there.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
